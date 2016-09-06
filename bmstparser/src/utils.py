@@ -36,7 +36,7 @@ def read_conll(fh):
     for line in fh:
         tok = line.strip().split()
         if not tok:
-            if len(tokens)>1: yield tokens
+            if len(tokens) > 1: yield tokens
             tokens = [root]
         else:
             tokens.append(ConllEntry(int(tok[0]), tok[1], tok[4], tok[3], int(tok[6]) if tok[6] != '_' else -1, tok[7]))
@@ -48,12 +48,15 @@ def write_conll(fn, conll_gen):
     with open(fn, 'w') as fh:
         for sentence in conll_gen:
             for entry in sentence[1:]:
-                fh.write('\t'.join([str(entry.id), entry.form, '_', entry.cpos, entry.pos, '_', str(entry.pred_parent_id), entry.pred_relation, '_', '_']))
+                fh.write('\t'.join(
+                    [str(entry.id), entry.form, '_', entry.cpos, entry.pos, '_', str(entry.pred_parent_id),
+                     entry.pred_relation, '_', '_']))
                 fh.write('\n')
             fh.write('\n')
 
 
 numberRegex = re.compile("[0-9]+|[0-9]+\\.[0-9]+|[0-9]+[0-9,]+");
+
+
 def normalize(word):
     return 'NUM' if numberRegex.match(word) else word.lower()
-

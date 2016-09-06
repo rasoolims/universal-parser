@@ -4,9 +4,12 @@ import pickle, utils, os, time, sys
 
 if __name__ == '__main__':
     parser = OptionParser()
-    parser.add_option("--train", dest="conll_train", help="Annotated CONLL train file", metavar="FILE", default="../data/PTB_SD_3_3_0/train.conll")
-    parser.add_option("--dev", dest="conll_dev", help="Annotated CONLL dev file", metavar="FILE", default="../data/PTB_SD_3_3_0/dev.conll")
-    parser.add_option("--test", dest="conll_test", help="Annotated CONLL test file", metavar="FILE", default="../data/PTB_SD_3_3_0/test.conll")
+    parser.add_option("--train", dest="conll_train", help="Annotated CONLL train file", metavar="FILE",
+                      default="../data/PTB_SD_3_3_0/train.conll")
+    parser.add_option("--dev", dest="conll_dev", help="Annotated CONLL dev file", metavar="FILE",
+                      default="../data/PTB_SD_3_3_0/dev.conll")
+    parser.add_option("--test", dest="conll_test", help="Annotated CONLL test file", metavar="FILE",
+                      default="../data/PTB_SD_3_3_0/test.conll")
     parser.add_option("--params", dest="params", help="Parameters file", metavar="FILE", default="params.pickle")
     parser.add_option("--extrn", dest="external_embedding", help="External embeddings", metavar="FILE")
     parser.add_option("--model", dest="model", help="Load/Save model file", metavar="FILE", default="barchybrid.model")
@@ -53,11 +56,11 @@ if __name__ == '__main__':
         for epoch in xrange(options.epochs):
             print 'Starting epoch', epoch
             parser.Train(options.conll_train)
-            devpath = os.path.join(options.output, 'dev_epoch_' + str(epoch+1) + '.conll')
+            devpath = os.path.join(options.output, 'dev_epoch_' + str(epoch + 1) + '.conll')
             utils.write_conll(devpath, parser.Predict(options.conll_dev))
-            os.system('perl src/utils/eval.pl -g ' + options.conll_dev + ' -s ' + devpath  + ' > ' + devpath + '.txt &')
+            os.system('perl src/utils/eval.pl -g ' + options.conll_dev + ' -s ' + devpath + ' > ' + devpath + '.txt &')
             print 'Finished predicting dev'
-            parser.Save(os.path.join(options.output, options.model + str(epoch+1)))
+            parser.Save(os.path.join(options.output, options.model + str(epoch + 1)))
     else:
         with open(options.params, 'r') as paramsfp:
             words, w2i, pos, rels, stored_opt = pickle.load(paramsfp)
@@ -71,6 +74,5 @@ if __name__ == '__main__':
         pred = list(parser.Predict(options.conll_test))
         te = time.time()
         utils.write_conll(tespath, pred)
-        os.system('perl src/utils/eval.pl -g ' + options.conll_test + ' -s ' + tespath  + ' > ' + tespath + '.txt &')
-        print 'Finished predicting test',te-ts
-
+        os.system('perl src/utils/eval.pl -g ' + options.conll_test + ' -s ' + tespath + ' > ' + tespath + '.txt &')
+        print 'Finished predicting test', te - ts

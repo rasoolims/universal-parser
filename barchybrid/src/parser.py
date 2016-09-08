@@ -7,7 +7,7 @@ if __name__ == '__main__':
     parser.add_option("--train", dest="conll_train", help="Annotated CONLL train file", metavar="FILE",
                       default="../data/PTB_SD_3_3_0/train.conll")
     parser.add_option("--dev", dest="conll_dev", help="Annotated CONLL dev file", metavar="FILE",
-                      default="../data/PTB_SD_3_3_0/dev.conll")
+                      default="")
     parser.add_option("--test", dest="conll_test", help="Annotated CONLL test file", metavar="FILE",
                       default="../data/PTB_SD_3_3_0/test.conll")
     parser.add_option("--params", dest="params", help="Parameters file", metavar="FILE", default="params.pickle")
@@ -57,9 +57,10 @@ if __name__ == '__main__':
             print 'Starting epoch', epoch
             parser.Train(options.conll_train)
             devpath = os.path.join(options.output, 'dev_epoch_' + str(epoch + 1) + '.conll')
-            utils.write_conll(devpath, parser.Predict(options.conll_dev))
-            os.system('perl src/utils/eval.pl -g ' + options.conll_dev + ' -s ' + devpath + ' > ' + devpath + '.txt &')
-            print 'Finished predicting dev'
+            if options.conll_dev!='':
+                utils.write_conll(devpath, parser.Predict(options.conll_dev))
+                os.system('perl src/utils/eval.pl -g ' + options.conll_dev + ' -s ' + devpath + ' > ' + devpath + '.txt &')
+                print 'Finished predicting dev'
             parser.Save(os.path.join(options.output, options.model + str(epoch + 1)))
     else:
         with open(options.params, 'r') as paramsfp:

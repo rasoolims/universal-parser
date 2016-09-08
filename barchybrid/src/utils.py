@@ -95,7 +95,7 @@ def write_conll(fn, conll_gen):
         for sentence in conll_gen:
             for entry in sentence[1:]:
                 fh.write('\t'.join(
-                    [str(entry.id), entry.form, '_', entry.pos, '_', str(entry.pred_parent_id),
+                    [str(entry.id), entry.form, '_', entry.pos, entry.pos, '_', str(entry.pred_parent_id),
                      entry.pred_relation, '_', '_']))
                 fh.write('\n')
             fh.write('\n')

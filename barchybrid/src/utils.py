@@ -67,7 +67,7 @@ def vocab(conll_path):
 def read_conll(fh, proj):
     dropped = 0
     read = 0
-    root = ConllEntry(0, '*root*', 'ROOT-POS', 'ROOT-CPOS', 0, 'rroot')
+    root = ConllEntry(0, '*root*', 'ROOT-POS', 0, 'rroot')
     tokens = [root]
     for line in fh:
         tok = line.strip().split()

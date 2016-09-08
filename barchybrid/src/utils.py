@@ -1,17 +1,14 @@
 from collections import Counter
 import re
 
-
 class ConllEntry:
-    def __init__(self, id, form, pos, cpos, parent_id=None, relation=None):
+    def __init__(self, id, form, pos, parent_id=None, relation=None):
         self.id = id
         self.form = form
         self.norm = normalize(form)
-        self.cpos = cpos.upper()
         self.pos = pos.upper()
         self.parent_id = parent_id
         self.relation = relation
-
 
 class ParseForest:
     def __init__(self, sentence):
@@ -36,7 +33,6 @@ class ParseForest:
         child.pred_parent_id = parent.id
         del self.roots[child_index]
 
-
 def isProj(sentence):
     forest = ParseForest(sentence)
     unassigned = {entry.id: sum([1 for pentry in sentence if pentry.parent_id == entry.id]) for entry in sentence}
@@ -53,7 +49,6 @@ def isProj(sentence):
                 break
 
     return len(forest.roots) == 1
-
 
 def vocab(conll_path):
     wordsCount = Counter()
@@ -87,7 +82,7 @@ def read_conll(fh, proj):
             tokens = [root]
             id = 0
         else:
-            tokens.append(ConllEntry(int(tok[0]), tok[1], tok[4], tok[3], int(tok[6]) if tok[6] != '_' else -1, tok[7]))
+            tokens.append(ConllEntry(int(tok[0]), tok[1], tok[3], int(tok[6]) if tok[6] != '_' else -1, tok[7]))
     if len(tokens) > 1:
         yield tokens
 

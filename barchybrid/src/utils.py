@@ -76,7 +76,7 @@ def read_conll(fh, proj):
                 if not proj or isProj(tokens):
                     yield tokens
                 else:
-                    print 'Non-projective sentence dropped'
+                    # print 'Non-projective sentence dropped'
                     dropped += 1
                 read += 1
             tokens = [root]

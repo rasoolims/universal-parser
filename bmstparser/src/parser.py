@@ -64,5 +64,5 @@ if __name__ == '__main__':
             acc = utils.eval(options.conll_dev, devpath)
             print 'currect UAS', acc
             if acc > best_acc:
-                print 'saving model'
+                print 'saving model', acc
                 parser.Save(os.path.join(options.output, os.path.basename(options.model)))

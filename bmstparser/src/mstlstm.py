@@ -49,18 +49,7 @@ class MSTParserLSTM:
 
             print 'Load external embedding. Vector dimensions', self.edim
 
-        if self.bibiFlag:
-            self.builders = [VanillaLSTMBuilder(1, self.wdims + self.pdims + self.edim, self.ldims, self.model),
-                             VanillaLSTMBuilder(1, self.wdims + self.pdims + self.edim, self.ldims, self.model)]
-            self.bbuilders = [VanillaLSTMBuilder(1, self.ldims * 2, self.ldims, self.model),
-                              VanillaLSTMBuilder(1, self.ldims * 2, self.ldims, self.model)]
-        elif self.layers > 0:
-            self.builders = [VanillaLSTMBuilder(self.layers, self.wdims + self.pdims + self.edim, self.ldims, self.model),
-                             VanillaLSTMBuilder(self.layers, self.wdims + self.pdims + self.edim, self.ldims, self.model)]
-        else:
-            self.builders = [SimpleRNNBuilder(1, self.wdims + self.pdims + self.edim, self.ldims, self.model),
-                             SimpleRNNBuilder(1, self.wdims + self.pdims + self.edim, self.ldims, self.model)]
-
+        self.deep_lstms = BiRNNBuilder(self.layers, self.wdims + self.pdims + self.edim, self.ldims*2, self.model, VanillaLSTMBuilder)
         self.hidden_units = options.hidden_units
         self.hidden2_units = options.hidden2_units
 
@@ -97,9 +86,9 @@ class MSTParserLSTM:
 
     def  __getExpr(self, sentence, i, j, train):
         if sentence[i].headfov is None:
-            sentence[i].headfov = self.hidLayerFOH.expr() * concatenate([sentence[i].lstms[0], sentence[i].lstms[1]])
+            sentence[i].headfov = self.hidLayerFOH.expr() * sentence[i].vec
         if sentence[j].modfov is None:
-            sentence[j].modfov  = self.hidLayerFOM.expr() * concatenate([sentence[j].lstms[0], sentence[j].lstms[1]])
+            sentence[j].modfov  = self.hidLayerFOM.expr() * sentence[j].vec
 
         if self.hidden2_units > 0:
             output = self.outLayer.expr() * self.activation(self.hid2Bias.expr() + self.hid2Layer.expr() * self.activation(sentence[i].headfov + sentence[j].modfov + self.hidBias.expr())) # + self.outBias
@@ -111,14 +100,13 @@ class MSTParserLSTM:
     def __evaluate(self, sentence, train):
         exprs = [ [self.__getExpr(sentence, i, j, train) for j in xrange(len(sentence))] for i in xrange(len(sentence)) ]
         scores = np.array([ [output.scalar_value() for output in exprsRow] for exprsRow in exprs ])
-
         return scores, exprs
 
     def __evaluateLabel(self, sentence, i, j):
         if sentence[i].rheadfov is None:
-            sentence[i].rheadfov = self.rhidLayerFOH.expr() * concatenate([sentence[i].lstms[0], sentence[i].lstms[1]])
+            sentence[i].rheadfov = self.rhidLayerFOH.expr() * sentence[i].vec
         if sentence[j].rmodfov is None:
-            sentence[j].rmodfov  = self.rhidLayerFOM.expr() * concatenate([sentence[j].lstms[0], sentence[j].lstms[1]])
+            sentence[j].rmodfov  = self.rhidLayerFOM.expr() * sentence[j].vec
 
         if self.hidden2_units > 0:
             output = self.routLayer.expr() * self.activation(self.rhid2Bias.expr() + self.rhid2Layer.expr() * self.activation(sentence[i].rheadfov + sentence[j].rmodfov + self.rhidBias.expr())) + self.routBias.expr()
@@ -145,38 +133,14 @@ class MSTParserLSTM:
                     posvec = self.plookup[int(self.pos[entry.pos])] if self.pdims > 0 else None
                     evec = self.elookup[int(self.extrnd.get(entry.form, self.extrnd.get(entry.norm, 0)))] if self.external_embedding is not None else None
                     entry.vec = concatenate(filter(None, [wordvec, posvec, evec]))
-
-                    entry.lstms = [entry.vec, entry.vec]
                     entry.headfov = None
                     entry.modfov = None
-
                     entry.rheadfov = None
                     entry.rmodfov = None
 
-                if self.blstmFlag:
-                    lstm_forward = self.builders[0].initial_state()
-                    lstm_backward = self.builders[1].initial_state()
-
-                    for entry, rentry in zip(conll_sentence, reversed(conll_sentence)):
-                        lstm_forward = lstm_forward.add_input(entry.vec)
-                        lstm_backward = lstm_backward.add_input(rentry.vec)
-
-                        entry.lstms[1] = lstm_forward.output()
-                        rentry.lstms[0] = lstm_backward.output()
-
-                    if self.bibiFlag:
-                        for entry in conll_sentence:
-                            entry.vec = concatenate(entry.lstms)
-
-                        blstm_forward = self.bbuilders[0].initial_state()
-                        blstm_backward = self.bbuilders[1].initial_state()
-
-                        for entry, rentry in zip(conll_sentence, reversed(conll_sentence)):
-                            blstm_forward = blstm_forward.add_input(entry.vec)
-                            blstm_backward = blstm_backward.add_input(rentry.vec)
-
-                            entry.lstms[1] = blstm_forward.output()
-                            rentry.lstms[0] = blstm_backward.output()
+                lstm_vecs = self.deep_lstms.transduce([entry.vec for entry in conll_sentence])
+                for i, entry in enumerate(conll_sentence):
+                    entry.vec = lstm_vecs[i]
 
                 scores, exprs = self.__evaluate(conll_sentence, True)
                 heads = decoder.parse_proj(scores)
@@ -237,37 +201,15 @@ class MSTParserLSTM:
                         evec = self.elookup[self.extrnd.get(entry.form, self.extrnd.get(entry.norm, 0)) if (dropFlag or (random.random() < 0.5)) else 0]
                     entry.vec = concatenate(filter(None, [wordvec, posvec, evec]))
 
-                    entry.lstms = [entry.vec, entry.vec]
                     entry.headfov = None
                     entry.modfov = None
 
                     entry.rheadfov = None
                     entry.rmodfov = None
 
-                if self.blstmFlag:
-                    lstm_forward = self.builders[0].initial_state()
-                    lstm_backward = self.builders[1].initial_state()
-
-                    for entry, rentry in zip(conll_sentence, reversed(conll_sentence)):
-                        lstm_forward = lstm_forward.add_input(entry.vec)
-                        lstm_backward = lstm_backward.add_input(rentry.vec)
-
-                        entry.lstms[1] = lstm_forward.output()
-                        rentry.lstms[0] = lstm_backward.output()
-
-                    if self.bibiFlag:
-                        for entry in conll_sentence:
-                            entry.vec = concatenate(entry.lstms)
-
-                        blstm_forward = self.bbuilders[0].initial_state()
-                        blstm_backward = self.bbuilders[1].initial_state()
-
-                        for entry, rentry in zip(conll_sentence, reversed(conll_sentence)):
-                            blstm_forward = blstm_forward.add_input(entry.vec)
-                            blstm_backward = blstm_backward.add_input(rentry.vec)
-
-                            entry.lstms[1] = blstm_forward.output()
-                            rentry.lstms[0] = blstm_backward.output()
+                lstm_vecs = self.deep_lstms.transduce([entry.vec for entry in conll_sentence])
+                for i, entry in enumerate(conll_sentence):
+                    entry.vec = lstm_vecs[i]
 
                 scores, exprs = self.__evaluate(conll_sentence, True)
                 gold = [entry.parent_id for entry in conll_sentence]

@@ -77,7 +77,7 @@ def backtrack_eisner(incomplete_backtrack, complete_backtrack, s, t, direction, 
     - t is the current end of the span
     - direction is 0 (left attachment) or 1 (right attachment)
     - complete is 1 if the current span is complete, and 0 otherwise
-    - heads is a (NW+1)-sized numpy array of integers which is a placeholder for storing the 
+    - heads is a (NW+1)-sized numpy array of integers which is a placeholder for storing the
     head of each word.
     '''
     if s == t:
@@ -104,3 +104,4 @@ def backtrack_eisner(incomplete_backtrack, complete_backtrack, s, t, direction, 
             backtrack_eisner(incomplete_backtrack, complete_backtrack, s, r, 1, 1, heads)
             backtrack_eisner(incomplete_backtrack, complete_backtrack, r + 1, t, 0, 1, heads)
             return
+

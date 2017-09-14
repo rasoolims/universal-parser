@@ -63,8 +63,28 @@ def write_conll(fn, conll_gen):
                 fh.write(str(entry) + '\n')
             fh.write('\n')
 
+def eval(gold, predicted):
+    correct_deps, all_deps = 0, 0
+    r2 = open(predicted, 'r')
+    for l1 in open(gold, 'r'):
+        s1 = l1.strip().split('\t')
+        s2 = r2.readline().strip().split('\t')
+        if len(s1) > 6:
+            if not is_punc(s2[3]):
+                all_deps += 1
+                if s1[6] == s2[6]:
+                       correct_deps += 1
+    return 100 * float(correct_deps) / all_deps
 
 numberRegex = re.compile("[0-9]+|[0-9]+\\.[0-9]+|[0-9]+[0-9,]+");
 def normalize(word):
     return 'NUM' if numberRegex.match(word) else word.lower()
+
+def is_punc(pos):
+	return  pos=='.' or pos=='PUNC' or pos =='PUNCT' or \
+        pos=="#" or pos=="''" or pos=="(" or \
+		pos=="[" or pos=="]" or pos=="{" or pos=="}" or \
+		pos=="\"" or pos=="," or pos=="." or pos==":" or \
+		pos=="``" or pos=="-LRB-" or pos=="-RRB-" or pos=="-LSB-" or \
+		pos=="-RSB-" or pos=="-LCB-" or pos=="-RCB-" or pos=='"' or pos==')'
 

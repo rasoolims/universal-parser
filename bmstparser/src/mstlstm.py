@@ -96,7 +96,6 @@ class MSTParserLSTM:
 
 
     def  __getExpr(self, sentence, i, j, train):
-
         if sentence[i].headfov is None:
             sentence[i].headfov = self.hidLayerFOH.expr() * concatenate([sentence[i].lstms[0], sentence[i].lstms[1]])
         if sentence[j].modfov is None:
@@ -109,13 +108,11 @@ class MSTParserLSTM:
 
         return output
 
-
     def __evaluate(self, sentence, train):
         exprs = [ [self.__getExpr(sentence, i, j, train) for j in xrange(len(sentence))] for i in xrange(len(sentence)) ]
         scores = np.array([ [output.scalar_value() for output in exprsRow] for exprsRow in exprs ])
 
         return scores, exprs
-
 
     def __evaluateLabel(self, sentence, i, j):
         if sentence[i].rheadfov is None:
@@ -136,8 +133,7 @@ class MSTParserLSTM:
 
 
     def Load(self, filename):
-        self.model.load(filename)
-
+        self.model.populate(filename)
 
     def Predict(self, conll_path):
         with open(conll_path, 'r') as conllFP:

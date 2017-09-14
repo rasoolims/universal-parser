@@ -44,18 +44,18 @@ if __name__ == '__main__':
 
         parser.Load(options.model)
         conllu = (os.path.splitext(options.conll_test.lower())[1] == '.conllu')
-        tespath = os.path.join(options.output, 'test_pred.conll' if not conllu else 'test_pred.conllu')
+        testpath = os.path.join(options.output, 'test_pred.conll' if not conllu else 'test_pred.conllu')
 
         ts = time.time()
         test_res = list(parser.Predict(options.conll_test))
         te = time.time()
         print 'Finished predicting test.', te-ts, 'seconds.'
-        utils.write_conll(tespath, test_res)
+        utils.write_conll(testpath, test_res)
 
         if not conllu:
-            os.system('perl src/utils/eval.pl -g ' + options.conll_test + ' -s ' + tespath  + ' > ' + tespath + '.txt')
+            os.system('perl src/utils/eval.pl -g ' + options.conll_test + ' -s ' + testpath + ' > ' + testpath + '.txt')
         else:
-            os.system('python src/utils/evaluation_script/conll17_ud_eval.py -v -w src/utils/evaluation_script/weights.clas ' + options.conll_test + ' ' + tespath + ' > ' + testpath + '.txt')
+            os.system('python src/utils/evaluation_script/conll17_ud_eval.py -v -w src/utils/evaluation_script/weights.clas ' + options.conll_test + ' ' + testpath + ' > ' + testpath + '.txt')
     else:
         print 'Preparing vocab'
         words, w2i, pos, rels = utils.vocab(options.conll_train)

@@ -94,7 +94,7 @@ class MSTParserLSTM:
 
     def __evaluate(self, sentence, train):
         exprs = [ [self.__getExpr(sentence, i, j, train) for j in xrange(len(sentence))] for i in xrange(len(sentence)) ]
-        scores = np.array([ [output.scalar_value() for output in exprsRow] for exprsRow in exprs ])
+        scores = np.array([[output.scalar_value() for output in exprsRow] for exprsRow in exprs ])
         return scores, exprs
 
     def __evaluateLabel(self, sentence, i, j):
@@ -214,12 +214,12 @@ class MSTParserLSTM:
                     goldLabelInd = self.rels[conll_sentence[modifier+1].relation]
                     wrongLabelInd = max(((l, scr) for l, scr in enumerate(rscores) if l != goldLabelInd), key=itemgetter(1))[0]
                     if rscores[goldLabelInd] < rscores[wrongLabelInd] + 1:
-                        lerrs.append(rexprs[wrongLabelInd] - rexprs[goldLabelInd])
+                        lerrs.append(scalarInput(1)+rexprs[wrongLabelInd] - rexprs[goldLabelInd])
 
                 e = sum([1 for h, g in zip(heads[1:], gold[1:]) if h != g])
                 eerrors += e
                 if e > 0:
-                    loss = [(exprs[h][i] - exprs[g][i]) for i, (h,g) in enumerate(zip(heads, gold)) if h != g] # * (1.0/float(e))
+                    loss = [max((scalarInput(1) + exprs[h][i] - exprs[g][i]), scalarInput(0)) for i, (h,g) in enumerate(zip(heads, gold)) if h != g] # * (1.0/float(e))
                     eloss += (e)
                     mloss += (e)
                     errs.extend(loss)

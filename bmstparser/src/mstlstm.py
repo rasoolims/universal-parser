@@ -191,7 +191,7 @@ class MSTParserLSTM:
                         evec = self.elookup[self.extrnd.get(entry.form, self.extrnd.get(entry.norm, 0)) if (dropFlag or (random.random() < 0.5)) else 0]
                     entry.vec = concatenate(filter(None, [wordvec, posvec, evec]))
                     if self.dropout:
-                        dropout(entry.vec, self.dropout_prob)
+                        entry.vec = dropout(entry.vec, self.dropout_prob)
 
                     entry.headfov = None
                     entry.modfov = None
@@ -203,7 +203,7 @@ class MSTParserLSTM:
                 for i, entry in enumerate(conll_sentence):
                     entry.vec = lstm_vecs[i]
                     if self.dropout:
-                        dropout(entry.vec, self.dropout_prob)
+                        entry.vec = dropout(entry.vec, self.dropout_prob)
 
                 scores, exprs = self.__evaluate(conll_sentence, True)
                 gold = [entry.parent_id for entry in conll_sentence]

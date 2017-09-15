@@ -9,27 +9,24 @@ class MSTParserLSTM:
     def __init__(self, vocab, pos, rels, w2i, options):
         self.model = Model()
         random.seed(1)
-        self.trainer = AdamTrainer(self.model)
-
+        self.trainer = AdamTrainer(self.model, options.lr, options.beta1, options.beta2)
         self.activations = {'tanh': tanh, 'sigmoid': logistic, 'relu': rectify, 'tanh3': (lambda x: tanh(cwise_multiply(cwise_multiply(x, x), x)))}
         self.activation = self.activations[options.activation]
 
-        self.blstmFlag = options.blstmFlag
-        self.labelsFlag = options.labelsFlag
         self.costaugFlag = options.costaugFlag
-        self.bibiFlag = options.bibiFlag
+        self.dropout = False if options.dropout==0.0 else True
+        self.dropout_prob = options.dropout
 
         self.ldims = options.lstm_dims
-        self.wdims = options.wembedding_dims
-        self.pdims = options.pembedding_dims
-        self.rdims = options.rembedding_dims
-        self.layers = options.lstm_layers
+        self.wdims = options.we
+        self.pdims = options.pe
+        self.rdims = options.re
+        self.layers = options.layer
         self.wordsCount = vocab
         self.vocab = {word: ind+3 for word, ind in w2i.iteritems()}
         self.pos = {word: ind+3 for ind, word in enumerate(pos)}
         self.rels = {word: ind for ind, word in enumerate(rels)}
         self.irels = rels
-
 
         self.external_embedding, self.edim = None, 0
         if options.external_embedding is not None:
@@ -72,17 +69,15 @@ class MSTParserLSTM:
 
         self.outLayer = self.model.add_parameters((1, self.hidden2_units if self.hidden2_units > 0 else self.hidden_units))
 
-        if self.labelsFlag:
-            self.rhidLayerFOH = self.model.add_parameters((self.hidden_units, 2 * self.ldims))
-            self.rhidLayerFOM = self.model.add_parameters((self.hidden_units, 2 * self.ldims))
-            self.rhidBias = self.model.add_parameters((self.hidden_units))
+        self.rhidLayerFOH = self.model.add_parameters((self.hidden_units, 2 * self.ldims))
+        self.rhidLayerFOM = self.model.add_parameters((self.hidden_units, 2 * self.ldims))
+        self.rhidBias = self.model.add_parameters((self.hidden_units))
 
-            self.rhid2Layer = self.model.add_parameters((self.hidden2_units, self.hidden_units))
-            self.rhid2Bias = self.model.add_parameters((self.hidden2_units))
+        self.rhid2Layer = self.model.add_parameters((self.hidden2_units, self.hidden_units))
+        self.rhid2Bias = self.model.add_parameters((self.hidden2_units))
 
-            self.routLayer = self.model.add_parameters((len(self.irels), self.hidden2_units if self.hidden2_units > 0 else self.hidden_units))
-            self.routBias = self.model.add_parameters((len(self.irels)))
-
+        self.routLayer = self.model.add_parameters((len(self.irels), self.hidden2_units if self.hidden2_units > 0 else self.hidden_units))
+        self.routBias = self.model.add_parameters((len(self.irels)))
 
     def  __getExpr(self, sentence, i, j, train):
         if sentence[i].headfov is None:
@@ -115,10 +110,8 @@ class MSTParserLSTM:
 
         return output.value(), output
 
-
     def Save(self, filename):
         self.model.save(filename)
-
 
     def Load(self, filename):
         self.model.populate(filename)
@@ -150,16 +143,13 @@ class MSTParserLSTM:
                     entry.pred_relation = '_'
 
                 dump = False
-
-                if self.labelsFlag:
-                    for modifier, head in enumerate(heads[1:]):
-                        scores, exprs = self.__evaluateLabel(conll_sentence, head, modifier+1)
-                        conll_sentence[modifier+1].pred_relation = self.irels[max(enumerate(scores), key=itemgetter(1))[0]]
+                for modifier, head in enumerate(heads[1:]):
+                    scores, exprs = self.__evaluateLabel(conll_sentence, head, modifier+1)
+                    conll_sentence[modifier+1].pred_relation = self.irels[max(enumerate(scores), key=itemgetter(1))[0]]
 
                 renew_cg()
                 if not dump:
                     yield sentence
-
 
     def Train(self, conll_path):
         errors = 0
@@ -200,6 +190,8 @@ class MSTParserLSTM:
                     if self.external_embedding is not None:
                         evec = self.elookup[self.extrnd.get(entry.form, self.extrnd.get(entry.norm, 0)) if (dropFlag or (random.random() < 0.5)) else 0]
                     entry.vec = concatenate(filter(None, [wordvec, posvec, evec]))
+                    if self.dropout:
+                        dropout(entry.vec, self.dropout_prob)
 
                     entry.headfov = None
                     entry.modfov = None
@@ -210,18 +202,19 @@ class MSTParserLSTM:
                 lstm_vecs = self.deep_lstms.transduce([entry.vec for entry in conll_sentence])
                 for i, entry in enumerate(conll_sentence):
                     entry.vec = lstm_vecs[i]
+                    if self.dropout:
+                        dropout(entry.vec, self.dropout_prob)
 
                 scores, exprs = self.__evaluate(conll_sentence, True)
                 gold = [entry.parent_id for entry in conll_sentence]
                 heads = decoder.parse_proj(scores, gold if self.costaugFlag else None)
 
-                if self.labelsFlag:
-                    for modifier, head in enumerate(gold[1:]):
-                        rscores, rexprs = self.__evaluateLabel(conll_sentence, head, modifier+1)
-                        goldLabelInd = self.rels[conll_sentence[modifier+1].relation]
-                        wrongLabelInd = max(((l, scr) for l, scr in enumerate(rscores) if l != goldLabelInd), key=itemgetter(1))[0]
-                        if rscores[goldLabelInd] < rscores[wrongLabelInd] + 1:
-                            lerrs.append(rexprs[wrongLabelInd] - rexprs[goldLabelInd])
+                for modifier, head in enumerate(gold[1:]):
+                    rscores, rexprs = self.__evaluateLabel(conll_sentence, head, modifier+1)
+                    goldLabelInd = self.rels[conll_sentence[modifier+1].relation]
+                    wrongLabelInd = max(((l, scr) for l, scr in enumerate(rscores) if l != goldLabelInd), key=itemgetter(1))[0]
+                    if rscores[goldLabelInd] < rscores[wrongLabelInd] + 1:
+                        lerrs.append(rexprs[wrongLabelInd] - rexprs[goldLabelInd])
 
                 e = sum([1 for h, g in zip(heads[1:], gold[1:]) if h != g])
                 eerrors += e

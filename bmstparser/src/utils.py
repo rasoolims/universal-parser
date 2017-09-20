@@ -1,6 +1,7 @@
 from collections import Counter
-import re
-
+import re, codecs,sys
+reload(sys)
+sys.setdefaultencoding('utf8')
 
 class ConllEntry:
     def __init__(self, id, form, lemma, pos, cpos, feats=None, parent_id=None, relation=None, deps=None, misc=None):
@@ -37,7 +38,6 @@ def vocab(conll_path):
 
     return (wordsCount, {w: i for i, w in enumerate(wordsCount.keys())}, posCount.keys(), relCount.keys())
 
-
 def read_conll(fh):
     root = ConllEntry(0, '*root*', '*root*', 'ROOT-POS', 'ROOT-CPOS', '_', -1, 'rroot', '_', '_')
     tokens = [root]
@@ -54,12 +54,11 @@ def read_conll(fh):
     if len(tokens) > 1:
         yield tokens
 
-
 def write_conll(fn, conll_gen):
-    with open(fn, 'w') as fh:
+    with codecs.open(fn, 'w', encoding='utf-8') as fh:
         for sentence in conll_gen:
             for entry in sentence[1:]:
-                fh.write(str(entry) + '\n')
+                fh.write(str(entry) + u'\n')
             fh.write('\n')
 
 def eval(gold, predicted):

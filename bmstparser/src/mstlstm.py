@@ -137,7 +137,6 @@ class MSTParserLSTM:
                     yield sentence
 
     def Train(self, conll_path):
-        loss,total = 0,0
         start = time.time()
 
         with open(conll_path, 'r') as conllFP:
@@ -147,8 +146,6 @@ class MSTParserLSTM:
             for iSentence, sentence in enumerate(shuffledData):
                 if iSentence % 100 == 0 and iSentence != 0:
                     print 'Processing sentence number:', iSentence, 'Loss:', loss / total, 'Time', time.time()-start
-                    start = time.time()
-                    loss, total = 0, 0
 
                 conll_sentence = [entry for entry in sentence if isinstance(entry, utils.ConllEntry)]
                 lstm_vecs = self.deep_lstms.transduce(self.getInputLayer(conll_sentence, True))
@@ -170,20 +167,16 @@ class MSTParserLSTM:
                 if len(loss_vec)>=self.batch:
                     err = esum(loss_vec)/len(loss_vec)
                     err.scalar_value()
-                    loss += err.value()
-                    total+=1
+                    print 'Processing sentence number:', iSentence+1, 'Loss:', err.value() , 'Time', time.time() - start
                     err.backward()
-                    loss_vec = []
                     renew_cg()
-                    print 'Processing sentence number:', iSentence, 'Loss:', loss / total, 'Time', time.time() - start
+                    loss,loss_vec,start = 0, [],time.time()
         if len(loss_vec) > 0:
             err = esum(loss_vec) / len(loss_vec)
             err.scalar_value()
-            loss += err.value()
-            total += 1
+            print 'Processing sentence number:', iSentence+1, 'Loss:', err.value(), 'Time', time.time() - start
             err.backward()
             self.trainer.update()
-            loss_vec = []
             renew_cg()
-            print 'Processing sentence number:', iSentence, 'Loss:', loss / total, 'Time', time.time() - start
+            loss, loss_vec, start = 0, [], time.time()
         self.trainer.update_epoch()

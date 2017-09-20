@@ -144,12 +144,8 @@ class MSTParserLSTM:
             random.shuffle(shuffledData)
             loss_vec = []
             for iSentence, sentence in enumerate(shuffledData):
-                if iSentence % 100 == 0 and iSentence != 0:
-                    print 'Processing sentence number:', iSentence, 'Loss:', loss / total, 'Time', time.time()-start
-
                 conll_sentence = [entry for entry in sentence if isinstance(entry, utils.ConllEntry)]
                 lstm_vecs = self.deep_lstms.transduce(self.getInputLayer(conll_sentence, True))
-
                 for i, entry in enumerate(conll_sentence):
                     entry.vec = lstm_vecs[i]
                     if self.dropout:
@@ -158,7 +154,6 @@ class MSTParserLSTM:
                     entry.modfov = self.hidLayerFOM.expr() * entry.vec
                     entry.rheadfov = self.rhidLayerFOH.expr() * entry.vec
                     entry.rmodfov = self.rhidLayerFOM.expr() * entry.vec
-
                 scores = self.__evaluate(conll_sentence)
                 for modifier, entry in enumerate(conll_sentence[1:]):
                     loss_vec.append(pickneglogsoftmax(scores[modifier+1], entry.parent_id))

@@ -15,8 +15,8 @@ class MSTParserLSTM:
         self.activation = self.activations[options.activation]
         self.dropout = False if options.dropout==0.0 else True
         self.wordsCount = vocab
-        self.vocab = {word: ind+3 for word, ind in w2i.iteritems()}
-        self.pos = {word: ind+3 for ind, word in enumerate(pos)}
+        self.vocab = {word: ind+1 for word, ind in w2i.iteritems()}
+        self.pos = {word: ind+1 for ind, word in enumerate(pos)}
         self.rels = {word: ind for ind, word in enumerate(rels)}
         self.irels = rels
 
@@ -138,7 +138,7 @@ class MSTParserLSTM:
                 scores = self.__evaluate(conll_sentence)
                 for modifier, entry in enumerate(conll_sentence[1:]):
                     loss_vec.append(pickneglogsoftmax(scores[modifier+1], entry.parent_id))
-                    loss_vec.append(pickneglogsoftmax(self.__evaluateLabel(conll_sentence, entry.parent_id, modifier+1), self.rels[entry.relation]))
+                    #loss_vec.append(pickneglogsoftmax(self.__evaluateLabel(conll_sentence, entry.parent_id, modifier+1), self.rels[entry.relation]))
 
                 if len(loss_vec)>=self.options.batch:
                     err = esum(loss_vec)/len(loss_vec)

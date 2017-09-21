@@ -57,7 +57,7 @@ class MSTParserLSTM:
         return [self.__getExpr(sentence, i) for i in xrange(len(sentence))]
 
     def get_all_scores(self, sentence):
-        scores = concatenate_cols(self.__evaluate(sentence))
+        scores = concatenate_cols([log(softmax(x)) for x in self.__evaluate(sentence)])
         return reshape(scores, (len(sentence), len(sentence))).npvalue()
 
     def __evaluateLabel(self, sentence, i, j):

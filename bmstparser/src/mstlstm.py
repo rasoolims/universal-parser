@@ -73,13 +73,13 @@ class MSTParserLSTM:
         embed = []
         for entry in sentence:
             c = float(self.wordsCount.get(entry.norm, 0))
-            dropFlag = (random.random() < (c / (0.25 + c))) if train else False
-            wordvec = self.wlookup[int(self.vocab.get(entry.norm, 0)) if dropFlag else 0] if self.options.we > 0 else None
+            keep = (random.random() < (c / (0.25 + c))) if train else False
+            wordvec = self.wlookup[int(self.vocab.get(entry.norm, 0)) if keep else 0] if self.options.we > 0 else None
             posvec = self.plookup[int(self.pos[entry.pos])] if self.options.pe > 0 else None
             evec = None
 
             if self.external_embedding is not None:
-                evec = self.elookup[self.extrnd.get(entry.form, self.extrnd.get(entry.norm, 0)) if (dropFlag or (random.random() < 0.5)) else 0]
+                evec = self.elookup[self.extrnd.get(entry.form, self.extrnd.get(entry.norm, 0)) if (keep or (random.random() < 0.5)) else 0]
             vec = concatenate(filter(None, [wordvec, posvec, evec]))
             if self.dropout:
                 vec = dropout(vec, self.options.dropout)
@@ -124,7 +124,6 @@ class MSTParserLSTM:
             shuffledData = list(read_conll(conllFP))
             random.shuffle(shuffledData)
             loss_vec = []
-            correct,all_ = 0,0
             for iSentence, sentence in enumerate(shuffledData):
                 conll_sentence = [entry for entry in sentence if isinstance(entry, utils.ConllEntry)]
                 lstm_vecs = self.deep_lstms.transduce(self.getInputLayer(conll_sentence, True))
@@ -138,9 +137,6 @@ class MSTParserLSTM:
                     entry.rmodfov = self.rhidLayerFOM.expr() * entry.vec
                 scores = self.__evaluate(conll_sentence)
                 for modifier, entry in enumerate(conll_sentence[1:]):
-                    if np.argmax(np.array(scores[modifier+1].value()))==entry.parent_id:
-                        correct+=1
-                    all_+=1
                     loss_vec.append(pickneglogsoftmax(scores[modifier+1], entry.parent_id))
                     loss_vec.append(pickneglogsoftmax(self.__evaluateLabel(conll_sentence, entry.parent_id, modifier+1), self.rels[entry.relation]))
 
@@ -148,9 +144,8 @@ class MSTParserLSTM:
                     err = esum(loss_vec)/len(loss_vec)
                     err.scalar_value()
                     print 'Processing sentence number:', iSentence+1, 'Loss:', err.value() , 'Time', time.time() - start
-                    print 'correct',100 * float(correct) / all_
-                    correct,all_=0,0
                     err.backward()
+                    self.trainer.update()
                     renew_cg()
                     loss,loss_vec,start = 0, [],time.time()
         if len(loss_vec) > 0:

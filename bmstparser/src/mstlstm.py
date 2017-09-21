@@ -51,7 +51,7 @@ class MSTParserLSTM:
 
     def  __getExpr(self, sentence, modifier):
         h = concatenate_cols([self.activation(sentence[i].headfov + sentence[modifier].modfov + self.hidBias.expr()) for i in range(len(sentence))])
-        return transpose(self.outLayer.expr() * h)
+        return (reshape(self.outLayer.expr() * h,(len(sentence),1)))
 
     def __evaluate(self, sentence):
         return [self.__getExpr(sentence, i) for i in xrange(len(sentence))]
@@ -138,7 +138,7 @@ class MSTParserLSTM:
                 scores = self.__evaluate(conll_sentence)
                 for modifier, entry in enumerate(conll_sentence[1:]):
                     loss_vec.append(pickneglogsoftmax(scores[modifier+1], entry.parent_id))
-                    #loss_vec.append(pickneglogsoftmax(self.__evaluateLabel(conll_sentence, entry.parent_id, modifier+1), self.rels[entry.relation]))
+                    loss_vec.append(pickneglogsoftmax(self.__evaluateLabel(conll_sentence, entry.parent_id, modifier+1), self.rels[entry.relation]))
 
                 if len(loss_vec)>=self.options.batch:
                     err = esum(loss_vec)/len(loss_vec)

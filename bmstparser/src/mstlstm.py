@@ -124,6 +124,7 @@ class MSTParserLSTM:
             shuffledData = list(read_conll(conllFP))
             random.shuffle(shuffledData)
             loss_vec = []
+            correct,all_ = 0,0
             for iSentence, sentence in enumerate(shuffledData):
                 conll_sentence = [entry for entry in sentence if isinstance(entry, utils.ConllEntry)]
                 lstm_vecs = self.deep_lstms.transduce(self.getInputLayer(conll_sentence, True))
@@ -137,6 +138,9 @@ class MSTParserLSTM:
                     entry.rmodfov = self.rhidLayerFOM.expr() * entry.vec
                 scores = self.__evaluate(conll_sentence)
                 for modifier, entry in enumerate(conll_sentence[1:]):
+                    if np.argmax(np.array(scores[modifier+1].value()))==entry.parent_id:
+                        correct+=1
+                    all_+=1
                     loss_vec.append(pickneglogsoftmax(scores[modifier+1], entry.parent_id))
                     loss_vec.append(pickneglogsoftmax(self.__evaluateLabel(conll_sentence, entry.parent_id, modifier+1), self.rels[entry.relation]))
 
@@ -144,6 +148,8 @@ class MSTParserLSTM:
                     err = esum(loss_vec)/len(loss_vec)
                     err.scalar_value()
                     print 'Processing sentence number:', iSentence+1, 'Loss:', err.value() , 'Time', time.time() - start
+                    print 'correct',100 * float(correct) / all_
+                    correct,all_=0,0
                     err.backward()
                     renew_cg()
                     loss,loss_vec,start = 0, [],time.time()
@@ -155,3 +161,4 @@ class MSTParserLSTM:
             self.trainer.update()
             renew_cg()
         self.trainer.update_epoch()
+

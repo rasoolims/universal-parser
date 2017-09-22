@@ -56,10 +56,6 @@ class MSTParserLSTM:
     def __evaluate(self, sentence):
         return [self.__getExpr(sentence, i) for i in xrange(len(sentence))]
 
-    def get_all_scores(self, sentence):
-        scores = concatenate_cols([log(softmax(x)) for x in self.__evaluate(sentence)])
-        return reshape(scores, (len(sentence), len(sentence))).npvalue()
-
     def __evaluateLabel(self, sentence, i, j):
        return self.routLayer.expr() * self.activation(sentence[i].rheadfov + sentence[j].rmodfov + self.rhidBias.expr()) + self.routBias.expr()
 
@@ -102,14 +98,15 @@ class MSTParserLSTM:
                     entry.rmodfov = self.rhidLayerFOM.expr() * entry.vec
 
                 if greedy:
-                    scores = self.get_all_scores(conll_sentence)
+                    scores = self.__evaluate(conll_sentence)
                     for modifier, entry in enumerate(conll_sentence[1:]):
-                        entry.pred_parent_id = np.argmax(scores[modifier+1])
+                        entry.pred_parent_id = np.argmax(scores[modifier+1].value())
                         s = self.__evaluateLabel(conll_sentence, entry.pred_parent_id, modifier + 1).value()
                         conll_sentence[modifier + 1].pred_relation = self.irels[max(enumerate(s), key=itemgetter(1))[0]]
                 else:
-                    scores = self.get_all_scores(conll_sentence)
-                    heads = decoder.parse_proj(scores.T)
+                    scores = self.__evaluate(conll_sentence)
+                    scores = np.array([np.array(scores[i]) for i in range(scores)]).T
+                    heads = decoder.parse_proj(scores)
 
                     for entry, head in zip(conll_sentence, heads):
                         entry.pred_parent_id = head

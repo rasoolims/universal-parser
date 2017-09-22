@@ -86,7 +86,7 @@ class MSTParserLSTM:
             embed.append(vec)
         return embed
 
-    def Predict(self, conll_path):
+    def Predict(self, conll_path, greedy):
         with codecs.open(conll_path, 'r', encoding='utf-8') as conllFP:
             for iSentence, sentence in enumerate(read_conll(conllFP)):
                 conll_sentence = [entry for entry in sentence if isinstance(entry, utils.ConllEntry)]
@@ -101,23 +101,23 @@ class MSTParserLSTM:
                     entry.rheadfov = self.rhidLayerFOH.expr() * entry.vec
                     entry.rmodfov = self.rhidLayerFOM.expr() * entry.vec
 
-                scores = self.get_all_scores(conll_sentence)
-                for modifier, entry in enumerate(conll_sentence[1:]):
-                    entry.pred_parent_id = np.argmax(scores[modifier+1])
-                    s = self.__evaluateLabel(conll_sentence, entry.pred_parent_id, modifier + 1).value()
-                    conll_sentence[modifier + 1].pred_relation = self.irels[max(enumerate(s), key=itemgetter(1))[0]]
-                '''
-                scores = self.get_all_scores(conll_sentence)
-                heads = decoder.parse_proj(scores.T)
+                if greedy:
+                    scores = self.get_all_scores(conll_sentence)
+                    for modifier, entry in enumerate(conll_sentence[1:]):
+                        entry.pred_parent_id = np.argmax(scores[modifier+1])
+                        s = self.__evaluateLabel(conll_sentence, entry.pred_parent_id, modifier + 1).value()
+                        conll_sentence[modifier + 1].pred_relation = self.irels[max(enumerate(s), key=itemgetter(1))[0]]
+                else:
+                    scores = self.get_all_scores(conll_sentence)
+                    heads = decoder.parse_proj(scores.T)
 
-                for entry, head in zip(conll_sentence, heads):
-                    entry.pred_parent_id = head
-                    entry.pred_relation = '_'
+                    for entry, head in zip(conll_sentence, heads):
+                        entry.pred_parent_id = head
+                        entry.pred_relation = '_'
 
-                for modifier, head in enumerate(heads[1:]):
-                    scores = self.__evaluateLabel(conll_sentence, head, modifier+1).value()
-                    conll_sentence[modifier+1].pred_relation = self.irels[max(enumerate(scores), key=itemgetter(1))[0]]
-                '''
+                    for modifier, head in enumerate(heads[1:]):
+                        scores = self.__evaluateLabel(conll_sentence, head, modifier+1).value()
+                        conll_sentence[modifier+1].pred_relation = self.irels[max(enumerate(scores), key=itemgetter(1))[0]]
                 renew_cg()
                 yield sentence
 

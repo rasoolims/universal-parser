@@ -60,9 +60,14 @@ if __name__ == '__main__':
             print 'Starting epoch', epoch
             parser.Train(options.conll_train)
             devpath = os.path.join(options.output, 'dev_epoch_out')
-            utils.write_conll(devpath, parser.Predict(options.conll_dev))
+            utils.write_conll(devpath, parser.Predict(options.conll_dev,True))
             acc = utils.eval(options.conll_dev, devpath)
-            print 'currect UAS', acc
+            print 'currect greedy UAS', acc
+
+            utils.write_conll(devpath, parser.Predict(options.conll_dev, False))
+            acc2 = utils.eval(options.conll_dev, devpath)
+            print 'currect eisner UAS', acc2
+
             if acc > best_acc:
                 print 'saving model', acc
                 best_acc = acc

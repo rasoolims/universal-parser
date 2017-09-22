@@ -102,20 +102,24 @@ class MSTParserLSTM:
                     entry.rmodfov = self.rhidLayerFOM.expr() * entry.vec
 
                 scores = self.get_all_scores(conll_sentence)
+                for modifier, entry in enumerate(conll_sentence[1:]):
+                    entry.pred_parent_id = np.argmax(scores[modifier+1])
+                    s = self.__evaluateLabel(conll_sentence, entry.pred_parent_id, modifier + 1).value()
+                    conll_sentence[modifier + 1].pred_relation = self.irels[max(enumerate(s), key=itemgetter(1))[0]]
+                '''
+                scores = self.get_all_scores(conll_sentence)
                 heads = decoder.parse_proj(scores.T)
 
                 for entry, head in zip(conll_sentence, heads):
                     entry.pred_parent_id = head
                     entry.pred_relation = '_'
 
-                dump = False
                 for modifier, head in enumerate(heads[1:]):
                     scores = self.__evaluateLabel(conll_sentence, head, modifier+1).value()
                     conll_sentence[modifier+1].pred_relation = self.irels[max(enumerate(scores), key=itemgetter(1))[0]]
-
+                '''
                 renew_cg()
-                if not dump:
-                    yield sentence
+                yield sentence
 
     def Train(self, conll_path):
         start = time.time()

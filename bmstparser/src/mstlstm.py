@@ -105,7 +105,7 @@ class MSTParserLSTM:
                         conll_sentence[modifier + 1].pred_relation = self.irels[max(enumerate(s), key=itemgetter(1))[0]]
                 else:
                     scores = self.__evaluate(conll_sentence)
-                    scores = np.array([np.array(scores[i]) for i in range(len(scores))]).T
+                    scores = np.array([s.npvalue().T[0] for s in scores])
                     heads = decoder.parse_proj(scores)
 
                     for entry, head in zip(conll_sentence, heads):

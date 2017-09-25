@@ -90,8 +90,6 @@ class MSTParserLSTM:
 
                 for i, entry in enumerate(conll_sentence):
                     entry.vec = lstm_vecs[i]
-                    if self.dropout:
-                        entry.vec = dropout(entry.vec, self.options.dropout)
                     entry.headfov = self.hidLayerFOH.expr() * entry.vec
                     entry.modfov = self.hidLayerFOM.expr() * entry.vec
                     entry.rheadfov = self.rhidLayerFOH.expr() * entry.vec
@@ -118,9 +116,9 @@ class MSTParserLSTM:
                 renew_cg()
                 yield sentence
 
-    def Train(self, conll_path):
+    def Train(self, conll_path, t):
+        self.deep_lstms.set_dropout(self.options.dropout)
         start = time.time()
-        t = 0
         with open(conll_path, 'r') as conllFP:
             shuffledData = list(read_conll(conllFP))
             random.shuffle(shuffledData)
@@ -130,12 +128,15 @@ class MSTParserLSTM:
                 lstm_vecs = self.deep_lstms.transduce(self.getInputLayer(conll_sentence, True))
                 for i, entry in enumerate(conll_sentence):
                     entry.vec = lstm_vecs[i]
-                    if self.dropout:
-                        entry.vec = dropout(entry.vec, self.options.dropout)
                     entry.headfov = self.hidLayerFOH.expr() * entry.vec
                     entry.modfov = self.hidLayerFOM.expr() * entry.vec
                     entry.rheadfov = self.rhidLayerFOH.expr() * entry.vec
                     entry.rmodfov = self.rhidLayerFOM.expr() * entry.vec
+                    if self.dropout:
+                        entry.headfov = dropout(entry.headfov, self.options.dropout)
+                        entry.modfov = dropout(entry.modfov, self.options.dropout)
+                        entry.rheadfov = dropout(entry.rheadfov, self.options.dropout)
+                        entry.rmodfov = dropout(entry.rmodfov, self.options.dropout)
                 scores = self.__evaluate(conll_sentence)
                 for modifier, entry in enumerate(conll_sentence[1:]):
                     loss_vec.append(pickneglogsoftmax(scores[modifier+1], entry.parent_id))
@@ -166,3 +167,5 @@ class MSTParserLSTM:
                 lr = self.trainer.learning_rate * 0.75 ** decay_steps
                 self.trainer.learning_rate = lr
         print 'current learning rate', self.trainer.learning_rate
+        self.deep_lstms.disable_dropout()
+        return t

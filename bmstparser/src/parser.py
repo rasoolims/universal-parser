@@ -16,15 +16,15 @@ if __name__ == '__main__':
     parser.add_option("--pe", type="int", dest="pe", default=25)
     parser.add_option("--re", type="int", dest="re", default=25)
     parser.add_option("--epochs", type="int", dest="epochs", default=30)
-    parser.add_option("--hidden", type="int", dest="hidden_units", default=100)
+    parser.add_option("--hidden", type="int", dest="hidden_units", default=200)
     parser.add_option("--lr", type="float", dest="lr", default=0.002)
     parser.add_option("--beta1", type="float", dest="beta1", default=0.9)
     parser.add_option("--beta2", type="float", dest="beta2", default=0.9)
-    parser.add_option("--dropout", type="float", dest="dropout", default=0.0)
+    parser.add_option("--dropout", type="float", dest="dropout", default=0.33)
     parser.add_option("--outdir", type="string", dest="output", default="results")
     parser.add_option("--activation", type="string", dest="activation", default="tanh")
-    parser.add_option("--layer", type="int", dest="layer", default=2)
-    parser.add_option("--lstmdims", type="int", dest="lstm_dims", default=125)
+    parser.add_option("--layer", type="int", dest="layer", default=3)
+    parser.add_option("--lstmdims", type="int", dest="lstm_dims", default=400)
     parser.add_option("--predict", action="store_true", dest="predictFlag", default=False)
     parser.add_option("--no_anneal", action="store_false", dest="anneal", default=True)
     parser.add_option("--dynet-seed", type="int", dest="seed", default=0)
@@ -57,9 +57,10 @@ if __name__ == '__main__':
         print 'Initializing lstm mstparser:'
         parser = mstlstm.MSTParserLSTM(words, pos, rels, w2i, options)
         best_acc = -float('inf')
+        t = 0
         for epoch in xrange(options.epochs):
             print 'Starting epoch', epoch
-            parser.Train(options.conll_train)
+            t = parser.Train(options.conll_train, t)
             devpath = os.path.join(options.output, 'dev_epoch_out')
             utils.write_conll(devpath, parser.Predict(options.conll_dev,True))
             acc = utils.eval(options.conll_dev, devpath)

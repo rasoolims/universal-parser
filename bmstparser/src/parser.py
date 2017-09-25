@@ -32,7 +32,7 @@ if __name__ == '__main__':
     parser.add_option("--dynet-autobatch", type="int", dest="dynet-autobatch", default=0)
 
     (options, args) = parser.parse_args()
-
+    print options
     print 'Using external embedding:', options.external_embedding
     if options.predictFlag:
         with open(options.params, 'r') as paramsfp:

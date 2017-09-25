@@ -120,7 +120,7 @@ class MSTParserLSTM:
 
     def Train(self, conll_path):
         start = time.time()
-
+        t = 0
         with open(conll_path, 'r') as conllFP:
             shuffledData = list(read_conll(conllFP))
             random.shuffle(shuffledData)
@@ -148,7 +148,12 @@ class MSTParserLSTM:
                     err.backward()
                     self.trainer.update()
                     renew_cg()
-                    loss,loss_vec,start = 0, [],time.time()
+                    loss,loss_vec,start,t = 0, [],time.time(),t+1
+                    if self.options.anneal:
+                        decay_steps = min(1.0, float(t)/50000)
+                        lr = self.trainer.learning_rate * 0.75 ** decay_steps
+                        self.trainer.learning_rate = lr
+
         if len(loss_vec) > 0:
             err = esum(loss_vec) / len(loss_vec)
             err.scalar_value()
@@ -156,5 +161,8 @@ class MSTParserLSTM:
             err.backward()
             self.trainer.update()
             renew_cg()
-        self.trainer.update_epoch()
-
+            if self.options.anneal:
+                decay_steps = min(1.0, float(t)/ 50000)
+                lr = self.trainer.learning_rate * 0.75 ** decay_steps
+                self.trainer.learning_rate = lr
+        print 'current learning rate', self.trainer.learning_rate

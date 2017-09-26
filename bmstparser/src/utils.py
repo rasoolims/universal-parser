@@ -66,7 +66,7 @@ def write_conll(fn, conll_gen):
             fh.write('\n')
 
 def eval(gold, predicted):
-    correct_deps, all_deps = 0, 0
+    correct_deps, correct_l, all_deps = 0, 0, 0
     r2 = open(predicted, 'r')
     for l1 in open(gold, 'r'):
         s1 = l1.strip().split('\t')
@@ -75,8 +75,10 @@ def eval(gold, predicted):
             if not is_punc(s2[3]):
                 all_deps += 1
                 if s1[6] == s2[6]:
-                       correct_deps += 1
-    return 100 * float(correct_deps) / all_deps
+                    correct_deps += 1
+                    if s1[7]==s2[7]:
+                        correct_l+=1
+    return 100 * float(correct_deps) / all_deps, 100 * float(correct_l) / all_deps
 
 numberRegex = re.compile("[0-9]+|[0-9]+\\.[0-9]+|[0-9]+[0-9,]+");
 def normalize(word):

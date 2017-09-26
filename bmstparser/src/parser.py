@@ -15,7 +15,7 @@ if __name__ == '__main__':
     parser.add_option("--batch", type="int", dest="batch", default=10000)
     parser.add_option("--pe", type="int", dest="pe", default=100)
     parser.add_option("--re", type="int", dest="re", default=25)
-    parser.add_option("--epochs", type="int", dest="epochs", default=30)
+    parser.add_option("--t", type="int", dest="t", default=50000)
     parser.add_option("--hidden", type="int", dest="hidden_units", default=200)
     parser.add_option("--lr", type="float", dest="lr", default=0.002)
     parser.add_option("--beta1", type="float", dest="beta1", default=0.9)
@@ -57,20 +57,20 @@ if __name__ == '__main__':
         print 'Initializing lstm mstparser:'
         parser = mstlstm.MSTParserLSTM(pos, rels, w2i, options)
         best_acc = -float('inf')
-        t = 0
-        for epoch in xrange(options.epochs):
+        t, epoch = 0,1
+        while t<=options.t:
             print 'Starting epoch', epoch
-            t = parser.Train(options.conll_train, t)
+            t, epoch = parser.Train(options.conll_train, t), epoch+1
             devpath = os.path.join(options.output, 'dev_epoch_out')
             utils.write_conll(devpath, parser.Predict(options.conll_dev,True))
-            acc = utils.eval(options.conll_dev, devpath)
-            print 'currect greedy UAS', acc
+            uas,las = utils.eval(options.conll_dev, devpath)
+            print 'greedy UAS/LAS', uas, las
 
             utils.write_conll(devpath, parser.Predict(options.conll_dev, False))
-            acc2 = utils.eval(options.conll_dev, devpath)
-            print 'currect eisner UAS', acc2
+            uas, las = utils.eval(options.conll_dev, devpath)
+            print 'eisner UAS/LAS',  uas, las
 
-            if acc > best_acc:
-                print 'saving model', acc
-                best_acc = acc
+            if las > best_acc:
+                print 'saving model', las
+                best_acc = las
                 parser.Save(os.path.join(options.output, os.path.basename(options.model)))

@@ -37,7 +37,7 @@ class MSTParserLSTM:
                 if word in self.vocab:
                     self.wlookup.init_row(self.vocab[word], external_embedding[word])
 
-            print 'Initialized with pre-trained embedding. Vector dimensions', edim
+            print 'Initialized with pre-trained embedding. Vector dimensions', edim, 'and', len(external_embedding),'words'
 
         self.plookup = self.model.add_lookup_parameters((len(pos) + 1, options.pe))
         self.rlookup = self.model.add_lookup_parameters((len(rels), options.re))

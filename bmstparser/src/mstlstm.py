@@ -144,7 +144,7 @@ class MSTParserLSTM:
                     loss,loss_vec,start,t = 0, [],time.time(),t+1
                     if self.options.anneal:
                         decay_steps = min(1.0, float(t)/50000)
-                        lr = self.trainer.learning_rate * 0.75 ** decay_steps
+                        lr = self.options.lr * 0.75 ** decay_steps
                         self.trainer.learning_rate = lr
 
         renew_cg()

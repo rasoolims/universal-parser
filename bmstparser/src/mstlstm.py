@@ -137,8 +137,7 @@ class MSTParserLSTM:
                         entry.rmodfov = dropout(entry.rmodfov, self.options.dropout)
                 scores = self.__evaluate(conll_sentence)
                 for modifier, entry in enumerate(conll_sentence[1:]):
-                    loss_vec.append(pickneglogsoftmax(scores[modifier+1], entry.parent_id))
-                    loss_vec.append(pickneglogsoftmax(self.__evaluateLabel(conll_sentence, entry.parent_id, modifier+1), self.rels[entry.relation]))
+                    loss_vec.append((pickneglogsoftmax(scores[modifier+1], entry.parent_id) + pickneglogsoftmax(self.__evaluateLabel(conll_sentence, entry.parent_id, modifier+1), self.rels[entry.relation]))*0.5)
 
                 if len(loss_vec)>=self.options.batch:
                     err = esum(loss_vec)/len(loss_vec)

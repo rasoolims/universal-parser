@@ -12,7 +12,7 @@ if __name__ == '__main__':
     parser.add_option("--params", dest="params", help="Parameters file", metavar="FILE", default="params.pickle")
     parser.add_option("--model", dest="model", help="Load/Save model file", metavar="FILE", default="parser.model")
     parser.add_option("--we", type="int", dest="we", default=100)
-    parser.add_option("--batch", type="int", dest="batch", default=10000)
+    parser.add_option("--batch", type="int", dest="batch", default=5000)
     parser.add_option("--pe", type="int", dest="pe", default=100)
     parser.add_option("--re", type="int", dest="re", default=25)
     parser.add_option("--t", type="int", dest="t", default=50000)

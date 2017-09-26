@@ -11,7 +11,7 @@ class MSTParserLSTM:
         self.model = Model()
         self.options = options
         self.trainer = AdamTrainer(self.model, options.lr, options.beta1, options.beta2)
-        self.activations = {'tanh': tanh, 'sigmoid': logistic, 'relu': rectify, 'tanh3': (lambda x: tanh(cwise_multiply(cwise_multiply(x, x), x)))}
+        self.activations = {'tanh': tanh, 'sigmoid': logistic, 'relu': rectify, 'leaky': (lambda x: bmax(.1*x, x))}
         self.activation = self.activations[options.activation]
         self.dropout = False if options.dropout==0.0 else True
         self.vocab = {word: ind+1 for word, ind in w2i.iteritems()}

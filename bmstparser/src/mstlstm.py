@@ -7,14 +7,13 @@ import codecs
 
 
 class MSTParserLSTM:
-    def __init__(self, vocab, pos, rels, w2i, options):
+    def __init__(self, pos, rels, w2i, options):
         self.model = Model()
         self.options = options
         self.trainer = AdamTrainer(self.model, options.lr, options.beta1, options.beta2)
         self.activations = {'tanh': tanh, 'sigmoid': logistic, 'relu': rectify, 'tanh3': (lambda x: tanh(cwise_multiply(cwise_multiply(x, x), x)))}
         self.activation = self.activations[options.activation]
         self.dropout = False if options.dropout==0.0 else True
-        self.wordsCount = vocab
         self.vocab = {word: ind+1 for word, ind in w2i.iteritems()}
         self.pos = {word: ind+1 for ind, word in enumerate(pos)}
         self.rels = {word: ind for ind, word in enumerate(rels)}
@@ -36,7 +35,7 @@ class MSTParserLSTM:
             print 'Load external embedding. Vector dimensions', self.edim
 
         self.deep_lstms = BiRNNBuilder(options.layer, options.we + options.pe + self.edim, options.lstm_dims*2, self.model, VanillaLSTMBuilder)
-        self.wlookup = self.model.add_lookup_parameters((len(vocab) + 1, options.we))
+        self.wlookup = self.model.add_lookup_parameters((len(w2i) + 1, options.we))
         self.plookup = self.model.add_lookup_parameters((len(pos) + 1, options.pe))
         self.rlookup = self.model.add_lookup_parameters((len(rels), options.re))
         self.hidLayerFOH = self.model.add_parameters((options.hidden_units, options.lstm_dims * 2))
@@ -68,9 +67,7 @@ class MSTParserLSTM:
     def getInputLayer(self, sentence, train):
         embed = []
         for entry in sentence:
-            c = float(self.wordsCount.get(entry.norm, 0))
-            keep = (random.random() < (c / (0.25 + c))) if train else False
-            wordvec = self.wlookup[int(self.vocab.get(entry.norm, 0)) if keep else 0] if self.options.we > 0 else None
+            wordvec = self.wlookup[int(self.vocab.get(entry.norm, 0))] if self.options.we > 0 else None
             posvec = self.plookup[int(self.pos[entry.pos])] if self.options.pe > 0 else None
             evec = None
 

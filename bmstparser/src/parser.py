@@ -13,7 +13,7 @@ if __name__ == '__main__':
     parser.add_option("--model", dest="model", help="Load/Save model file", metavar="FILE", default="parser.model")
     parser.add_option("--we", type="int", dest="we", default=100)
     parser.add_option("--batch", type="int", dest="batch", default=10000)
-    parser.add_option("--pe", type="int", dest="pe", default=25)
+    parser.add_option("--pe", type="int", dest="pe", default=100)
     parser.add_option("--re", type="int", dest="re", default=25)
     parser.add_option("--epochs", type="int", dest="epochs", default=30)
     parser.add_option("--hidden", type="int", dest="hidden_units", default=200)
@@ -36,10 +36,10 @@ if __name__ == '__main__':
     print 'Using external embedding:', options.external_embedding
     if options.predictFlag:
         with open(options.params, 'r') as paramsfp:
-            words, w2i, pos, rels, stored_opt = pickle.load(paramsfp)
+            w2i, pos, rels, stored_opt = pickle.load(paramsfp)
         stored_opt.external_embedding = options.external_embedding
         print 'Initializing lstm mstparser:'
-        parser = mstlstm.MSTParserLSTM(words, pos, rels, w2i, stored_opt)
+        parser = mstlstm.MSTParserLSTM(pos, rels, w2i, stored_opt)
         parser.Load(options.model)
         ts = time.time()
         test_res = list(parser.Predict(options.conll_test))
@@ -48,14 +48,14 @@ if __name__ == '__main__':
         utils.write_conll(options.conll_output, test_res)
     else:
         print 'Preparing vocab'
-        words, w2i, pos, rels = utils.vocab(options.conll_train)
+        w2i, pos, rels = utils.vocab(options.conll_train)
 
         with open(os.path.join(options.output, options.params), 'w') as paramsfp:
-            pickle.dump((words, w2i, pos, rels, options), paramsfp)
+            pickle.dump((w2i, pos, rels, options), paramsfp)
         print 'Finished collecting vocab'
 
         print 'Initializing lstm mstparser:'
-        parser = mstlstm.MSTParserLSTM(words, pos, rels, w2i, options)
+        parser = mstlstm.MSTParserLSTM(pos, rels, w2i, options)
         best_acc = -float('inf')
         t = 0
         for epoch in xrange(options.epochs):

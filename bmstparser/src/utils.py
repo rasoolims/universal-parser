@@ -25,7 +25,7 @@ class ConllEntry:
         values = [str(self.id), self.form, self.lemma, self.cpos, self.pos, self.feats, str(self.pred_parent_id) if self.pred_parent_id is not None else None, self.pred_relation, self.deps, self.misc]
         return '\t'.join(['_' if v is None else v for v in values])
 
-def vocab(conll_path):
+def vocab(conll_path, min_count=2):
     wordsCount = Counter()
     posCount = Counter()
     relCount = Counter()
@@ -36,7 +36,11 @@ def vocab(conll_path):
             posCount.update([node.pos for node in sentence if isinstance(node, ConllEntry)])
             relCount.update([node.relation for node in sentence if isinstance(node, ConllEntry)])
 
-    return (wordsCount, {w: i for i, w in enumerate(wordsCount.keys())}, posCount.keys(), relCount.keys())
+    words = set()
+    for w in wordsCount.keys():
+        if wordsCount[w]>=min_count:
+            words.add(w)
+    return ({w: i for i, w in enumerate(words)}, posCount.keys(), relCount.keys())
 
 def read_conll(fh):
     root = ConllEntry(0, '*root*', '*root*', 'ROOT-POS', 'ROOT-CPOS', '_', -1, 'rroot', '_', '_')

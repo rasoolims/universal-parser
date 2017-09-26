@@ -18,20 +18,8 @@ class MSTParserLSTM:
         self.pos = {word: ind+1 for ind, word in enumerate(pos)}
         self.rels = {word: ind for ind, word in enumerate(rels)}
         self.irels = rels
-
-        self.deep_lstms = BiRNNBuilder(options.layer, options.we + options.pe, options.lstm_dims * 2, self.model, VanillaLSTMBuilder)
-        self.wlookup = self.model.add_lookup_parameters((len(w2i) + 1, options.we))
-        self.plookup = self.model.add_lookup_parameters((len(pos) + 1, options.pe))
-        self.rlookup = self.model.add_lookup_parameters((len(rels), options.re))
-        self.hidLayerFOH = self.model.add_parameters((options.hidden_units, options.lstm_dims * 2))
-        self.hidLayerFOM = self.model.add_parameters((options.hidden_units, options.lstm_dims * 2))
-        self.hidBias = self.model.add_parameters((options.hidden_units))
-        self.outLayer = self.model.add_parameters((1, options.hidden_units))
-        self.rhidLayerFOH = self.model.add_parameters((options.hidden_units, 2 * options.lstm_dims))
-        self.rhidLayerFOM = self.model.add_parameters((options.hidden_units, 2 * options.lstm_dims))
-        self.rhidBias = self.model.add_parameters((options.hidden_units))
-        self.routLayer = self.model.add_parameters((len(self.irels), options.hidden_units))
-        self.routBias = self.model.add_parameters((len(self.irels)))
+        edim = options.we
+        self.wlookup = self.model.add_lookup_parameters((len(w2i) + 1, edim))
 
         if options.external_embedding is not None:
             external_embedding_fp = open(options.external_embedding,'r')
@@ -50,6 +38,19 @@ class MSTParserLSTM:
                     self.wlookup.init_row(self.vocab[word], external_embedding[word])
 
             print 'Initialized with pre-trained embedding. Vector dimensions', edim
+
+        self.plookup = self.model.add_lookup_parameters((len(pos) + 1, options.pe))
+        self.rlookup = self.model.add_lookup_parameters((len(rels), options.re))
+        self.hidLayerFOH = self.model.add_parameters((options.hidden_units, options.lstm_dims * 2))
+        self.hidLayerFOM = self.model.add_parameters((options.hidden_units, options.lstm_dims * 2))
+        self.hidBias = self.model.add_parameters((options.hidden_units))
+        self.outLayer = self.model.add_parameters((1, options.hidden_units))
+        self.rhidLayerFOH = self.model.add_parameters((options.hidden_units, 2 * options.lstm_dims))
+        self.rhidLayerFOM = self.model.add_parameters((options.hidden_units, 2 * options.lstm_dims))
+        self.rhidBias = self.model.add_parameters((options.hidden_units))
+        self.routLayer = self.model.add_parameters((len(self.irels), options.hidden_units))
+        self.routBias = self.model.add_parameters((len(self.irels)))
+        self.deep_lstms = BiRNNBuilder(options.layer, edim + options.pe, options.lstm_dims * 2, self.model, VanillaLSTMBuilder)
 
     def  __getExpr(self, sentence, modifier):
         h = concatenate_cols([self.activation(sentence[i].headfov + sentence[modifier].modfov + self.hidBias.expr()) for i in range(len(sentence))])

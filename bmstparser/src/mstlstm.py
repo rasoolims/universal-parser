@@ -33,18 +33,23 @@ class MSTParserLSTM:
         self.routLayer = self.model.add_parameters((len(self.irels), options.hidden_units))
         self.routBias = self.model.add_parameters((len(self.irels)))
 
-        self.external_embedding = None
         if options.external_embedding is not None:
             external_embedding_fp = open(options.external_embedding,'r')
             external_embedding_fp.readline()
             external_embedding = {line.split(' ')[0] : [float(f) for f in line.strip().split(' ')[1:]] for line in external_embedding_fp}
             external_embedding_fp.close()
+            self.evocab = {word: i + 1 for i, word in enumerate(external_embedding)}
 
             edim = len(external_embedding.values()[0])
             self.wlookup = self.model.add_lookup_parameters((len(w2i) + 1, edim))
+            self.elookup = self.model.add_lookup_parameters((len(external_embedding) + 1, edim))
+            self.elookup.set_updated(False)
+            self.elookup.init_row(0, [0]*edim)
             for word in external_embedding.keys():
+                self.elookup.init_row(self.evocab[word], external_embedding[word])
                 if word in self.vocab:
                     self.wlookup.init_row(self.vocab[word], external_embedding[word])
+
             print 'Initialized with pre-trained embedding. Vector dimensions', edim
 
     def  __getExpr(self, sentence, modifier):
@@ -67,8 +72,9 @@ class MSTParserLSTM:
         embed = []
         for entry in sentence:
             wordvec = self.wlookup[int(self.vocab.get(entry.norm, 0))] if self.options.we > 0 else None
+            ewordvec = self.elookup[int(self.evocab.get(entry.norm, 0))] if self.options.we > 0 else None
             posvec = self.plookup[int(self.pos[entry.pos])] if self.options.pe > 0 else None
-            vec = concatenate(filter(None, [wordvec, posvec]))
+            vec = concatenate(filter(None, [wordvec+ewordvec, posvec]))
             if self.dropout:
                 vec = dropout(vec, self.options.dropout)
             embed.append(vec)

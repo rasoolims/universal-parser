@@ -23,7 +23,7 @@ class MSTParserLSTM:
 
         if options.external_embedding is not None:
             external_embedding_fp = open(options.external_embedding,'r')
-            external_embedding = {line.split(' ')[0] : [float(f) for f in line.strip().split(' ')[1:]] for line in external_embedding_fp if len(line.split(' ')>2)}
+            external_embedding = {line.split(' ')[0] : [float(f) for f in line.strip().split(' ')[1:]] for line in external_embedding_fp if len(line.split(' '))>2}
             external_embedding_fp.close()
             self.evocab = {word: i + 1 for i, word in enumerate(external_embedding)}
 

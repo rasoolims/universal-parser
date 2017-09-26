@@ -147,17 +147,7 @@ class MSTParserLSTM:
                         lr = self.trainer.learning_rate * 0.75 ** decay_steps
                         self.trainer.learning_rate = lr
 
-        if len(loss_vec) > 0:
-            err = esum(loss_vec) / len(loss_vec)
-            err.scalar_value()
-            print 'Processing sentence number:', iSentence+1, 'Loss:', err.value(), 'Time', time.time() - start
-            err.backward()
-            self.trainer.update()
-            renew_cg()
-            if self.options.anneal:
-                decay_steps = min(1.0, float(t)/ 50000)
-                lr = self.trainer.learning_rate * 0.75 ** decay_steps
-                self.trainer.learning_rate = lr
-        print 'current learning rate', self.trainer.learning_rate
+        renew_cg()
+        print 'current learning rate', self.trainer.learning_rate,'t:',t
         self.deep_lstms.disable_dropout()
         return t

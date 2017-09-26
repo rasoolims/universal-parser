@@ -116,11 +116,10 @@ class MSTParserLSTM:
 
     def Train(self, conll_path, t):
         self.deep_lstms.set_dropout(self.options.dropout)
-        start = time.time()
         with open(conll_path, 'r') as conllFP:
             shuffledData = list(read_conll(conllFP))
             random.shuffle(shuffledData)
-            loss_vec = []
+            start, lss, total,loss_vec = time.time(), 0, 0, []
             for iSentence, sentence in enumerate(shuffledData):
                 conll_sentence = [entry for entry in sentence if isinstance(entry, utils.ConllEntry)]
                 lstm_vecs = self.deep_lstms.transduce(self.getInputLayer(conll_sentence, True))
@@ -142,11 +141,15 @@ class MSTParserLSTM:
                 if len(loss_vec)>=self.options.batch:
                     err = esum(loss_vec)/len(loss_vec)
                     err.scalar_value()
-                    print 'Processing sentence number:', iSentence+1, 'Loss:', err.value() , 'Time', time.time() - start
+                    lss+= err.value()
+                    total+=1
+                    if total%10==0:
+                        print 'Processing sentence number:', iSentence+1, 'Loss:', float(lss)/total , 'Time', time.time() - start
+                        lss,total,start=0,0,time.time()
                     err.backward()
                     self.trainer.update()
                     renew_cg()
-                    loss,loss_vec,start,t = 0, [],time.time(),t+1
+                    loss_vec,t = [],t+1
                     if self.options.anneal:
                         decay_steps = min(1.0, float(t)/50000)
                         lr = self.options.lr * 0.75 ** decay_steps

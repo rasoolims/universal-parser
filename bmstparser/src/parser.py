@@ -27,7 +27,6 @@ if __name__ == '__main__':
     parser.add_option("--lstmdims", type="int", dest="lstm_dims", default=400)
     parser.add_option("--predict", action="store_true", dest="predictFlag", default=False)
     parser.add_option("--no_anneal", action="store_false", dest="anneal", default=True)
-    parser.add_option("--dynet-seed", type="int", dest="seed", default=0)
     parser.add_option("--dynet-mem", type="int", dest="mem", default=0)
     parser.add_option("--dynet-autobatch", type="int", dest="dynet-autobatch", default=0)
 

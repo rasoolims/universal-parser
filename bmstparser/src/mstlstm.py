@@ -40,7 +40,7 @@ class MSTParserLSTM:
             external_embedding = {line.split(' ')[0] : [float(f) for f in line.strip().split(' ')[1:]] for line in external_embedding_fp}
             external_embedding_fp.close()
 
-            edim = len(self.external_embedding.values()[0])
+            edim = len(external_embedding.values()[0])
             self.wlookup = self.model.add_lookup_parameters((len(w2i) + 1, edim))
             for word in external_embedding.keys():
                 if word in self.vocab:

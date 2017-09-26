@@ -19,22 +19,8 @@ class MSTParserLSTM:
         self.rels = {word: ind for ind, word in enumerate(rels)}
         self.irels = rels
 
-        self.external_embedding, self.edim = None, 0
-        if options.external_embedding is not None:
-            external_embedding_fp = open(options.external_embedding,'r')
-            external_embedding_fp.readline()
-            self.external_embedding = {line.split(' ')[0] : [float(f) for f in line.strip().split(' ')[1:]] for line in external_embedding_fp}
-            external_embedding_fp.close()
-
-            self.edim = len(self.external_embedding.values()[0])
-            self.noextrn = [0.0 for _ in xrange(self.edim)]
-            self.extrnd = {word: i + 1 for i, word in enumerate(self.external_embedding)}
-            self.elookup = self.model.add_lookup_parameters((len(self.external_embedding) + 1, self.edim))
-            for word, i in self.extrnd.iteritems():
-                self.elookup.init_row(i, self.external_embedding[word])
-            print 'Load external embedding. Vector dimensions', self.edim
-
-        self.deep_lstms = BiRNNBuilder(options.layer, options.we + options.pe + self.edim, options.lstm_dims*2, self.model, VanillaLSTMBuilder)
+        self.deep_lstms = BiRNNBuilder(options.layer, options.we + options.pe + self.edim, options.lstm_dims * 2,
+                                       self.model, VanillaLSTMBuilder)
         self.wlookup = self.model.add_lookup_parameters((len(w2i) + 1, options.we))
         self.plookup = self.model.add_lookup_parameters((len(pos) + 1, options.pe))
         self.rlookup = self.model.add_lookup_parameters((len(rels), options.re))
@@ -47,6 +33,20 @@ class MSTParserLSTM:
         self.rhidBias = self.model.add_parameters((options.hidden_units))
         self.routLayer = self.model.add_parameters((len(self.irels), options.hidden_units))
         self.routBias = self.model.add_parameters((len(self.irels)))
+
+        self.external_embedding, self.edim = None, 0
+        if options.external_embedding is not None:
+            external_embedding_fp = open(options.external_embedding,'r')
+            external_embedding_fp.readline()
+            external_embedding = {line.split(' ')[0] : [float(f) for f in line.strip().split(' ')[1:]] for line in external_embedding_fp}
+            external_embedding_fp.close()
+
+            edim = len(self.external_embedding.values()[0])
+            self.wlookup = self.model.add_lookup_parameters((len(w2i) + 1, edim))
+            for word in external_embedding.keys():
+                if word in self.vocab:
+                    self.wlookup.init_row(self.vocab[word], external_embedding[word])
+            print 'Initialized with pre-trained embedding. Vector dimensions', self.edim
 
     def  __getExpr(self, sentence, modifier):
         h = concatenate_cols([self.activation(sentence[i].headfov + sentence[modifier].modfov + self.hidBias.expr()) for i in range(len(sentence))])
@@ -69,11 +69,7 @@ class MSTParserLSTM:
         for entry in sentence:
             wordvec = self.wlookup[int(self.vocab.get(entry.norm, 0))] if self.options.we > 0 else None
             posvec = self.plookup[int(self.pos[entry.pos])] if self.options.pe > 0 else None
-            evec = None
-
-            if self.external_embedding is not None:
-                evec = self.elookup[self.extrnd.get(entry.form, self.extrnd.get(entry.norm, 0)) if (keep or (random.random() < 0.5)) else 0]
-            vec = concatenate(filter(None, [wordvec, posvec, evec]))
+            vec = concatenate(filter(None, [wordvec, posvec]))
             if self.dropout:
                 vec = dropout(vec, self.options.dropout)
             embed.append(vec)

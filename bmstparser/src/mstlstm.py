@@ -19,8 +19,7 @@ class MSTParserLSTM:
         self.rels = {word: ind for ind, word in enumerate(rels)}
         self.irels = rels
 
-        self.deep_lstms = BiRNNBuilder(options.layer, options.we + options.pe + self.edim, options.lstm_dims * 2,
-                                       self.model, VanillaLSTMBuilder)
+        self.deep_lstms = BiRNNBuilder(options.layer, options.we + options.pe, options.lstm_dims * 2, self.model, VanillaLSTMBuilder)
         self.wlookup = self.model.add_lookup_parameters((len(w2i) + 1, options.we))
         self.plookup = self.model.add_lookup_parameters((len(pos) + 1, options.pe))
         self.rlookup = self.model.add_lookup_parameters((len(rels), options.re))
@@ -34,7 +33,7 @@ class MSTParserLSTM:
         self.routLayer = self.model.add_parameters((len(self.irels), options.hidden_units))
         self.routBias = self.model.add_parameters((len(self.irels)))
 
-        self.external_embedding, self.edim = None, 0
+        self.external_embedding = None
         if options.external_embedding is not None:
             external_embedding_fp = open(options.external_embedding,'r')
             external_embedding_fp.readline()
@@ -46,7 +45,7 @@ class MSTParserLSTM:
             for word in external_embedding.keys():
                 if word in self.vocab:
                     self.wlookup.init_row(self.vocab[word], external_embedding[word])
-            print 'Initialized with pre-trained embedding. Vector dimensions', self.edim
+            print 'Initialized with pre-trained embedding. Vector dimensions', edim
 
     def  __getExpr(self, sentence, modifier):
         h = concatenate_cols([self.activation(sentence[i].headfov + sentence[modifier].modfov + self.hidBias.expr()) for i in range(len(sentence))])

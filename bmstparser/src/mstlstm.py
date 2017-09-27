@@ -52,19 +52,23 @@ class MSTParserLSTM:
         self.label_mlp_dep = self.model.add_parameters((options.label_mlp, options.lstm_dims * 2))
         self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp))
         self.b_arc = self.model.add_parameters((options.arc_mlp))
-        self.u_label = [self.model.add_parameters((options.label_mlp, options.label_mlp)) for _ in range(len(self.irels))]
+        self.u_label = self.model.add_parameters((options.label_mlp, len(self.irels) * options.label_mlp))
         self.w_label = self.model.add_parameters((len(self.irels), 2 * options.label_mlp))
         self.b_label = self.model.add_parameters((len(self.irels)))
 
     def __getExpr(self, sentence, modifier):
         H = transpose(concatenate_cols([sentence[i].headfov for i in range(len(sentence))]))
+        # M = concatenate_cols([sentence[i].modfov for i in range(len(sentence))])
         return H * (self.w_arc.expr()*sentence[modifier].modfov + self.b_arc.expr())
 
     def __evaluate(self, sentence):
+        # H = transpose(concatenate_cols([sentence[i].headfov for i in range(len(sentence))]))
+        # M = concatenate_cols([sentence[i].modfov for i in range(len(sentence))])
+        # res = H * self.w_arc.expr() * M + H * self.b_arc.expr()
         return [self.__getExpr(sentence, i) for i in xrange(len(sentence))]
 
     def __evaluateLabel(self, sentence, i, j):
-        u = concatenate([transpose(sentence[i].rheadfov) * self.u_label[l].expr() * sentence[j].rmodfov for l in range(len(self.irels))])
+        u = reshape(transpose(sentence[i].rheadfov) * self.u_label.expr(), (len(self.irels), self.options.label_mlp)) * sentence[j].rmodfov
         return u + self.w_label.expr() * concatenate([sentence[j].rmodfov, sentence[i].rheadfov]) + self.b_label.expr()
 
     def Save(self, filename):
@@ -148,7 +152,7 @@ class MSTParserLSTM:
                     err.scalar_value()
                     lss += err.value()
                     total += 1
-                    if True:#total % 10 == 0:
+                    if total % 10 == 0:
                         print 'Processing sentence number:', iSentence + 1, 'Loss:', float(
                             lss) / total, 'Time', time.time() - start
                         lss, total, start = 0, 0, time.time()

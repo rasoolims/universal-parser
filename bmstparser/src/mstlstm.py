@@ -56,16 +56,10 @@ class MSTParserLSTM:
         self.w_label = self.model.add_parameters((len(self.irels), 2 * options.label_mlp))
         self.b_label = self.model.add_parameters((len(self.irels)))
 
-    def __getExpr(self, sentence, modifier):
-        H = transpose(concatenate_cols([sentence[i].headfov for i in range(len(sentence))]))
-        # M = concatenate_cols([sentence[i].modfov for i in range(len(sentence))])
-        return H * (self.w_arc.expr()*sentence[modifier].modfov + self.b_arc.expr())
-
     def __evaluate(self, sentence):
-        # H = transpose(concatenate_cols([sentence[i].headfov for i in range(len(sentence))]))
-        # M = concatenate_cols([sentence[i].modfov for i in range(len(sentence))])
-        # res = H * self.w_arc.expr() * M + H * self.b_arc.expr()
-        return [self.__getExpr(sentence, i) for i in xrange(len(sentence))]
+        H = transpose(concatenate_cols([sentence[i].headfov for i in range(len(sentence))]))
+        M = concatenate_cols([sentence[i].modfov for i in range(len(sentence))])
+        return affine_transform([H*self.b_arc.expr(), H, self.w_arc.expr() * M])
 
     def __evaluateLabel(self, sentence, i, j):
         u = reshape(transpose(sentence[i].rheadfov) * self.u_label.expr(), (len(self.irels), self.options.label_mlp)) * sentence[j].rmodfov
@@ -110,16 +104,14 @@ class MSTParserLSTM:
                 self.getLstmLayer(conll_sentence, False)
 
                 if greedy:
-                    scores = self.__evaluate(conll_sentence)
+                    scores = self.__evaluate(conll_sentence).value().T
                     for modifier, entry in enumerate(conll_sentence[1:]):
-                        entry.pred_parent_id = np.argmax(scores[modifier + 1].value())
+                        entry.pred_parent_id = np.argmax(scores[modifier + 1])
                         s = self.__evaluateLabel(conll_sentence, entry.pred_parent_id, modifier + 1).value()
                         conll_sentence[modifier + 1].pred_relation = self.irels[max(enumerate(s), key=itemgetter(1))[0]]
                 else:
-                    scores = self.__evaluate(conll_sentence)
-                    scores = np.array([s.npvalue().T[0] for s in scores]).T
+                    scores = self.__evaluate(conll_sentence).value().T
                     heads = decoder.parse_proj(scores)
-
                     for entry, head in zip(conll_sentence, heads):
                         entry.pred_parent_id = head
                         entry.pred_relation = '_'
@@ -144,8 +136,7 @@ class MSTParserLSTM:
                 for modifier, entry in enumerate(conll_sentence[1:]):
                     loss_vec.append(pickneglogsoftmax(scores[modifier + 1], entry.parent_id))
                     loss_vec.append(
-                        pickneglogsoftmax(self.__evaluateLabel(conll_sentence, entry.parent_id, modifier + 1),
-                                          self.rels[entry.relation]))
+                        pickneglogsoftmax(self.__evaluateLabel(conll_sentence, entry.parent_id, modifier + 1), self.rels[entry.relation]))
 
                 if len(loss_vec) >= 2 * self.options.batch:
                     err = esum(loss_vec) / len(loss_vec)

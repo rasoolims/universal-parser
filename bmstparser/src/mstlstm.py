@@ -148,7 +148,7 @@ class MSTParserLSTM:
                     err.scalar_value()
                     lss += err.value()
                     total += 1
-                    if total % 10 == 0:
+                    if True:#total % 10 == 0:
                         print 'Processing sentence number:', iSentence + 1, 'Loss:', float(
                             lss) / total, 'Time', time.time() - start
                         lss, total, start = 0, 0, time.time()

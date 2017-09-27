@@ -104,7 +104,7 @@ class MSTParserLSTM:
                 self.getLstmLayer(conll_sentence, False)
 
                 if greedy:
-                    scores = self.__evaluate(conll_sentence).value().T
+                    scores = self.__evaluate(conll_sentence).value()
                     for modifier, entry in enumerate(conll_sentence[1:]):
                         entry.pred_parent_id = np.argmax(scores[modifier + 1])
                         s = self.__evaluateLabel(conll_sentence, entry.pred_parent_id, modifier + 1).value()

@@ -16,6 +16,8 @@ if __name__ == '__main__':
     parser.add_option("--pe", type="int", dest="pe", default=100)
     parser.add_option("--re", type="int", dest="re", default=25)
     parser.add_option("--t", type="int", dest="t", default=50000)
+    parser.add_option("--arc_mlp", type="int", dest="arc_mlp", default=500)
+    parser.add_option("--label_mlp", type="int", dest="label_mlp", default=100)
     parser.add_option("--hidden", type="int", dest="hidden_units", default=200)
     parser.add_option("--lr", type="float", dest="lr", default=0.002)
     parser.add_option("--beta1", type="float", dest="beta1", default=0.9)
@@ -41,7 +43,7 @@ if __name__ == '__main__':
         parser = mstlstm.MSTParserLSTM(pos, rels, w2i, stored_opt)
         parser.Load(options.model)
         ts = time.time()
-        test_res = list(parser.Predict(options.conll_test, False))
+        test_res = list(parser.Predict(options.conll_test))
         te = time.time()
         print 'Finished predicting test.', te-ts, 'seconds.'
         utils.write_conll(options.conll_output, test_res)

@@ -36,7 +36,6 @@ class MSTParserLSTM:
                 self.elookup.init_row(self.evocab[word], external_embedding[word])
                 if word in self.vocab:
                     self.wlookup.init_row(self.vocab[word], external_embedding[word])
-
             print 'Initialized with pre-trained embedding. Vector dimensions', edim, 'and', len(external_embedding),'words'
 
         self.plookup = self.model.add_lookup_parameters((len(pos) + 1, options.pe))
@@ -75,7 +74,7 @@ class MSTParserLSTM:
             ewordvec = self.elookup[int(self.evocab.get(entry.norm, 0))] if self.options.we > 0 else None
             posvec = self.plookup[int(self.pos[entry.pos])] if self.options.pe > 0 else None
             vec = concatenate(filter(None, [wordvec+ewordvec, posvec]))
-            if self.dropout:
+            if self.dropout and train:
                 vec = dropout(vec, self.options.dropout)
             embed.append(vec)
         return embed

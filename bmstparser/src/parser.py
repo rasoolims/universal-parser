@@ -41,7 +41,7 @@ if __name__ == '__main__':
         parser = mstlstm.MSTParserLSTM(pos, rels, w2i, stored_opt)
         parser.Load(options.model)
         ts = time.time()
-        test_res = list(parser.Predict(options.conll_test))
+        test_res = list(parser.Predict(options.conll_test, False))
         te = time.time()
         print 'Finished predicting test.', te-ts, 'seconds.'
         utils.write_conll(options.conll_output, test_res)

@@ -26,7 +26,7 @@ if __name__ == '__main__':
     parser.add_option("--outdir", type="string", dest="output", default="results")
     parser.add_option("--activation", type="string", dest="activation", default="leaky")
     parser.add_option("--layer", type="int", dest="layer", default=3)
-    parser.add_option("--lstmdims", type="int", dest="lstm_dims", default=400)
+    parser.add_option("--rnn", type="int", dest="rnn", help='dimension of rnn in each direction', default=400)
     parser.add_option("--predict", action="store_true", dest="predictFlag", default=False)
     parser.add_option("--no_anneal", action="store_false", dest="anneal", default=True)
     parser.add_option("--dynet-mem", type="int", dest="mem", default=0)

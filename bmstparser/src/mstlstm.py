@@ -43,27 +43,25 @@ class MSTParserLSTM:
 
         self.plookup = self.model.add_lookup_parameters((len(pos) + 1, options.pe))
         self.rlookup = self.model.add_lookup_parameters((len(rels), options.re))
-        self.deep_lstms = BiRNNBuilder(options.layer, edim + options.pe, options.lstm_dims * 2, self.model,
-                                       VanillaLSTMBuilder)
+        self.deep_lstms = BiRNNBuilder(options.layer, edim + options.pe, options.rnn * 2, self.model, VanillaLSTMBuilder)
 
-        self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.lstm_dims * 2))
-        self.label_mlp_head = self.model.add_parameters((options.label_mlp, options.lstm_dims * 2))
-        self.arc_mlp_dep = self.model.add_parameters((options.arc_mlp, options.lstm_dims * 2))
-        self.label_mlp_dep = self.model.add_parameters((options.label_mlp, options.lstm_dims * 2))
+        self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2))
+        self.label_mlp_head = self.model.add_parameters((options.label_mlp, options.rnn * 2))
+        self.arc_mlp_dep = self.model.add_parameters((options.arc_mlp, options.rnn * 2))
+        self.label_mlp_dep = self.model.add_parameters((options.label_mlp, options.rnn * 2))
         self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp))
         self.b_arc = self.model.add_parameters((options.arc_mlp))
         self.u_label = self.model.add_parameters((options.label_mlp, len(self.irels) * options.label_mlp))
         self.w_label = self.model.add_parameters((len(self.irels), 2 * options.label_mlp))
         self.b_label = self.model.add_parameters((len(self.irels)))
 
-    def __evaluate(self, sentence):
-        H = transpose(concatenate_cols([sentence[i].headfov for i in range(len(sentence))]))
-        M = concatenate_cols([sentence[i].modfov for i in range(len(sentence))])
-        return affine_transform([H*self.b_arc.expr(), H, self.w_arc.expr() * M])
+    def __evaluate(self, H, M):
+        return affine_transform([transpose(H)*self.b_arc.expr(), transpose(H), self.w_arc.expr() * M])
 
-    def __evaluateLabel(self, sentence, i, j):
-        u = reshape(transpose(sentence[i].rheadfov) * self.u_label.expr(), (len(self.irels), self.options.label_mlp)) * sentence[j].rmodfov
-        return u + self.w_label.expr() * concatenate([sentence[j].rmodfov, sentence[i].rheadfov]) + self.b_label.expr()
+    def __evaluateLabel(self, i, j, HL, ML):
+        h, m = transpose(HL), transpose(ML)
+        u = reshape(transpose(h[i]) * self.u_label.expr(), (len(self.irels), self.options.label_mlp)) * m[j]
+        return u + self.w_label.expr() * concatenate([m[j], h[i]]) + self.b_label.expr()
 
     def Save(self, filename):
         self.model.save(filename)
@@ -84,40 +82,37 @@ class MSTParserLSTM:
         return embed
 
     def getLstmLayer(self, sentence, train):
-        lstm_vecs = self.deep_lstms.transduce(self.getInputLayer(sentence, train))
-        for i, entry in enumerate(sentence):
-            entry.vec = lstm_vecs[i]
-            entry.headfov = self.activation(self.arc_mlp_head.expr() * entry.vec)
-            entry.modfov = self.activation(self.arc_mlp_dep.expr() * entry.vec)
-            entry.rheadfov = self.activation(self.label_mlp_head.expr() * entry.vec)
-            entry.rmodfov = self.activation(self.label_mlp_dep.expr() * entry.vec)
-            if self.dropout and train:
-                entry.headfov = dropout(entry.headfov, self.options.dropout)
-                entry.modfov = dropout(entry.modfov, self.options.dropout)
-                entry.rheadfov = dropout(entry.rheadfov, self.options.dropout)
-                entry.rmodfov = dropout(entry.rmodfov, self.options.dropout)
+        h = concatenate_cols(self.deep_lstms.transduce(self.getInputLayer(sentence, train)))
+        H = self.activation(self.arc_mlp_head.expr() * h)
+        M = self.activation(self.arc_mlp_dep.expr() * h)
+        HL = self.activation(self.label_mlp_head.expr() * h)
+        ML = self.activation(self.label_mlp_dep.expr() * h)
+        if self.dropout and train:
+            d = self.options.dropout
+            H, M, HL, ML = dropout(H, d), dropout(M, d), dropout(HL, d), dropout(ML, d)
+        return H, M, HL, ML
 
     def Predict(self, conll_path, greedy):
         with codecs.open(conll_path, 'r', encoding='utf-8') as conllFP:
             for iSentence, sentence in enumerate(read_conll(conllFP)):
                 conll_sentence = [entry for entry in sentence if isinstance(entry, utils.ConllEntry)]
-                self.getLstmLayer(conll_sentence, False)
+                H, M, HL, ML = self.getLstmLayer(conll_sentence, False)
 
                 if greedy:
-                    scores = self.__evaluate(conll_sentence).value()
+                    scores = self.__evaluate(H, M).value()
                     for modifier, entry in enumerate(conll_sentence[1:]):
                         entry.pred_parent_id = np.argmax(scores[modifier + 1])
-                        s = self.__evaluateLabel(conll_sentence, entry.pred_parent_id, modifier + 1).value()
+                        s = self.__evaluateLabel(entry.pred_parent_id, modifier + 1,HL, ML).value()
                         conll_sentence[modifier + 1].pred_relation = self.irels[max(enumerate(s), key=itemgetter(1))[0]]
                 else:
-                    scores = self.__evaluate(conll_sentence).value().T
+                    scores = self.__evaluate(H, M).value().T
                     heads = decoder.parse_proj(scores)
                     for entry, head in zip(conll_sentence, heads):
                         entry.pred_parent_id = head
                         entry.pred_relation = '_'
 
                     for modifier, head in enumerate(heads[1:]):
-                        scores = self.__evaluateLabel(conll_sentence, head, modifier + 1).value()
+                        scores = self.__evaluateLabel(head, modifier + 1, HL, ML).value()
                         conll_sentence[modifier + 1].pred_relation = self.irels[
                             max(enumerate(scores), key=itemgetter(1))[0]]
                 renew_cg()
@@ -131,12 +126,12 @@ class MSTParserLSTM:
             start, lss, total, loss_vec = time.time(), 0, 0, []
             for iSentence, sentence in enumerate(shuffledData):
                 conll_sentence = [entry for entry in sentence if isinstance(entry, utils.ConllEntry)]
-                self.getLstmLayer(conll_sentence, True)
-                scores = self.__evaluate(conll_sentence)
+                H, M, HL, ML = self.getLstmLayer(conll_sentence, True)
+                scores = self.__evaluate(H, M)
                 for modifier, entry in enumerate(conll_sentence[1:]):
                     loss_vec.append(pickneglogsoftmax(scores[modifier + 1], entry.parent_id))
                     loss_vec.append(
-                        pickneglogsoftmax(self.__evaluateLabel(conll_sentence, entry.parent_id, modifier + 1), self.rels[entry.relation]))
+                        pickneglogsoftmax(self.__evaluateLabel(entry.parent_id, modifier + 1, HL, ML), self.rels[entry.relation]))
 
                 if len(loss_vec) >= 2 * self.options.batch:
                     err = esum(loss_vec) / len(loss_vec)

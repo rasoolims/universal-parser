@@ -4,7 +4,7 @@ from operator import itemgetter
 import utils, time, random, decoder
 import numpy as np
 import codecs
-
+from linalg import *
 
 class MSTParserLSTM:
     def __init__(self, pos, rels, w2i, options):
@@ -44,16 +44,20 @@ class MSTParserLSTM:
         self.plookup = self.model.add_lookup_parameters((len(pos) + 1, options.pe))
         self.rlookup = self.model.add_lookup_parameters((len(rels), options.re))
         self.deep_lstms = BiRNNBuilder(options.layer, edim + options.pe, options.rnn * 2, self.model, VanillaLSTMBuilder)
-
-        self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2))
-        self.label_mlp_head = self.model.add_parameters((options.label_mlp, options.rnn * 2))
-        self.arc_mlp_dep = self.model.add_parameters((options.arc_mlp, options.rnn * 2))
-        self.label_mlp_dep = self.model.add_parameters((options.label_mlp, options.rnn * 2))
-        self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp))
-        self.b_arc = self.model.add_parameters((options.arc_mlp))
-        self.u_label = self.model.add_parameters((options.label_mlp, len(self.irels) * options.label_mlp))
-        self.w_label = self.model.add_parameters((len(self.irels), 2 * options.label_mlp))
-        self.b_label = self.model.add_parameters((len(self.irels)))
+        for i in range(len(self.deep_lstms.builder_layers)):
+            builder = self.deep_lstms.builder_layers[i]
+            b0 = orthonormal_VanillaLSTMBuilder(builder[0], builder[0].spec[1], builder[0].spec[2])
+            b1 = orthonormal_VanillaLSTMBuilder(builder[1], builder[1].spec[1], builder[1].spec[2])
+            self.deep_lstms.builder_layers[i] = (b0, b1)
+        self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init= NumpyInitializer(orthonormal_initializer(options.arc_mlp, options.rnn * 2)))
+        self.label_mlp_head = self.model.add_parameters((options.label_mlp, options.rnn * 2), init= NumpyInitializer(orthonormal_initializer(options.label_mlp, options.rnn * 2)))
+        self.arc_mlp_dep = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init= NumpyInitializer(orthonormal_initializer(options.arc_mlp, options.rnn * 2)))
+        self.label_mlp_dep = self.model.add_parameters((options.label_mlp, options.rnn * 2), init= NumpyInitializer(orthonormal_initializer(options.label_mlp, options.rnn * 2)))
+        self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp), init= NumpyInitializer(orthonormal_initializer(options.arc_mlp, options.arc_mlp)))
+        self.b_arc = self.model.add_parameters((options.arc_mlp), init=ConstInitializer(0))
+        self.u_label = self.model.add_parameters((options.label_mlp, len(self.irels) * options.label_mlp), init= NumpyInitializer(orthonormal_initializer(options.label_mlp, len(self.irels) * options.label_mlp)))
+        self.w_label = self.model.add_parameters((len(self.irels), 2 * options.label_mlp), init= NumpyInitializer(orthonormal_initializer(len(self.irels), 2 * options.label_mlp)))
+        self.b_label = self.model.add_parameters((len(self.irels)), init=ConstInitializer(0))
 
     def __evaluate(self, H, M):
         return affine_transform([transpose(H)*self.b_arc.expr(), transpose(H), self.w_arc.expr() * M])

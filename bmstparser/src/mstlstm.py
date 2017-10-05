@@ -96,7 +96,7 @@ class MSTParserLSTM:
             H, M, HL, ML = dropout(H, d), dropout(M, d), dropout(HL, d), dropout(ML, d)
         return H, M, HL, ML
 
-    def Predict(self, conll_path, greedy):
+    def Predict(self, conll_path, greedy, non_proj):
         with codecs.open(conll_path, 'r', encoding='utf-8') as conllFP:
             for iSentence, sentence in enumerate(read_conll(conllFP)):
                 conll_sentence = [entry for entry in sentence if isinstance(entry, utils.ConllEntry)]
@@ -109,8 +109,14 @@ class MSTParserLSTM:
                         s = self.__evaluateLabel(entry.pred_parent_id, modifier + 1,HL, ML).value()
                         conll_sentence[modifier + 1].pred_relation = self.irels[max(enumerate(s), key=itemgetter(1))[0]]
                 else:
-                    scores = self.__evaluate(H, M).value().T
-                    heads = decoder.parse_proj(scores)
+                    scores = self.__evaluate(H, M)
+                    probs = softmax(transpose(scores)).npvalue().T
+                    scores = scores.npvalue().T
+                    heads = None
+                    if non_proj:
+                        heads = decoder.arc_argmax(probs, len(conll_sentence))
+                    else:
+                        heads = decoder.parse_proj(scores)
                     for entry, head in zip(conll_sentence, heads):
                         entry.pred_parent_id = head
                         entry.pred_relation = '_'

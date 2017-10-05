@@ -43,7 +43,7 @@ if __name__ == '__main__':
         parser = mstlstm.MSTParserLSTM(pos, rels, w2i, stored_opt)
         parser.Load(options.model)
         ts = time.time()
-        test_res = list(parser.Predict(options.conll_test))
+        test_res = list(parser.Predict(options.conll_test, False, True))
         te = time.time()
         print 'Finished predicting test.', te-ts, 'seconds.'
         utils.write_conll(options.conll_output, test_res)
@@ -63,14 +63,18 @@ if __name__ == '__main__':
             print 'Starting epoch', epoch
             t, epoch = parser.Train(options.conll_train, t), epoch+1
             devpath = os.path.join(options.output, 'dev_epoch_out')
-            utils.write_conll(devpath, parser.Predict(options.conll_dev,True))
-            uas,las = utils.eval(options.conll_dev, devpath)
-            print 'greedy UAS/LAS', uas, las
+            utils.write_conll(devpath, parser.Predict(options.conll_dev, True, False))
+            uas,las1 = utils.eval(options.conll_dev, devpath)
+            print 'greedy UAS/LAS', uas, las1
 
-            utils.write_conll(devpath, parser.Predict(options.conll_dev, False))
-            uas, las = utils.eval(options.conll_dev, devpath)
-            print 'eisner UAS/LAS',  uas, las
+            utils.write_conll(devpath, parser.Predict(options.conll_dev, False, False))
+            uas, las2 = utils.eval(options.conll_dev, devpath)
+            print 'eisner UAS/LAS',  uas, las2
 
+            utils.write_conll(devpath, parser.Predict(options.conll_dev, False, True))
+            uas, las3 = utils.eval(options.conll_dev, devpath)
+            print 'tarjan UAS/LAS', uas, las3
+            las = max(las1, max(las2, las3))
             if las > best_acc:
                 print 'saving model', las
                 best_acc = las

@@ -57,19 +57,18 @@ class MSTParserLSTM:
         self.arc_mlp_dep_b = self.model.add_parameters((options.arc_mlp,), init = ConstInitializer(0))
         self.label_mlp_dep = self.model.add_parameters((options.label_mlp, options.rnn * 2), init= NumpyInitializer(orthonormal_initializer(options.label_mlp, options.rnn * 2)))
         self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init = ConstInitializer(0))
-        self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp), init= NumpyInitializer(orthonormal_initializer(options.arc_mlp, options.arc_mlp)))
-        self.b_arc = self.model.add_parameters((options.arc_mlp,), init = ConstInitializer(0))
-        self.u_label = self.model.add_parameters((options.label_mlp, len(self.irels) * options.label_mlp), init= NumpyInitializer(orthonormal_initializer(options.label_mlp, len(self.irels) * options.label_mlp)))
-        self.w_label = self.model.add_parameters((len(self.irels), 2 * options.label_mlp), init= NumpyInitializer(orthonormal_initializer(len(self.irels), 2 * options.label_mlp)))
-        self.b_label = self.model.add_parameters((len(self.irels)))
+        self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp+1), init = ConstInitializer(0))
+        self.u_label = self.model.add_parameters((options.label_mlp+1, len(self.irels) * (options.label_mlp+1)), init = ConstInitializer(0))
 
     def __evaluate(self, H, M):
-        return affine_transform([transpose(H)*self.b_arc.expr(), transpose(H), self.w_arc.expr() * M])
+        M2 = concatenate([M, inputTensor(np.ones((1, M.dim()[0][1]), dtype=np.float32))])
+        return transpose(H)*(self.w_arc.expr()*M2)
 
     def __evaluateLabel(self, i, j, HL, ML):
-        h, m = transpose(HL), transpose(ML)
-        u = reshape(transpose(h[i]) * self.u_label.expr(), (len(self.irels), self.options.label_mlp)) * m[j]
-        return u + self.w_label.expr() * concatenate([m[j], h[i]]) + self.b_label.expr()
+        H2 = concatenate([HL, inputTensor(np.ones((1, HL.dim()[0][1]), dtype=np.float32))])
+        M2 = concatenate([ML, inputTensor(np.ones((1, ML.dim()[0][1]), dtype=np.float32))])
+        h, m = transpose(H2), transpose(M2)
+        return reshape(transpose(h[i]) * self.u_label.expr(), (len(self.irels), self.options.label_mlp+1)) * m[j]
 
     def Save(self, filename):
         self.model.save(filename)

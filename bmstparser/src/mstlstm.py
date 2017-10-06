@@ -50,14 +50,18 @@ class MSTParserLSTM:
             b1 = orthonormal_VanillaLSTMBuilder(builder[1], builder[1].spec[1], builder[1].spec[2])
             self.deep_lstms.builder_layers[i] = (b0, b1)
         self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init= NumpyInitializer(orthonormal_initializer(options.arc_mlp, options.rnn * 2)))
+        self.arc_mlp_head_b = self.model.add_parameters((options.arc_mlp,), init = ConstInitializer(0))
         self.label_mlp_head = self.model.add_parameters((options.label_mlp, options.rnn * 2), init= NumpyInitializer(orthonormal_initializer(options.label_mlp, options.rnn * 2)))
+        self.label_mlp_head_b = self.model.add_parameters((options.label_mlp,), init = ConstInitializer(0))
         self.arc_mlp_dep = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init= NumpyInitializer(orthonormal_initializer(options.arc_mlp, options.rnn * 2)))
+        self.arc_mlp_dep_b = self.model.add_parameters((options.arc_mlp,), init = ConstInitializer(0))
         self.label_mlp_dep = self.model.add_parameters((options.label_mlp, options.rnn * 2), init= NumpyInitializer(orthonormal_initializer(options.label_mlp, options.rnn * 2)))
+        self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init = ConstInitializer(0))
         self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp), init= NumpyInitializer(orthonormal_initializer(options.arc_mlp, options.arc_mlp)))
-        self.b_arc = self.model.add_parameters((options.arc_mlp), init=ConstInitializer(0))
+        self.b_arc = self.model.add_parameters((options.arc_mlp,), init = ConstInitializer(0))
         self.u_label = self.model.add_parameters((options.label_mlp, len(self.irels) * options.label_mlp), init= NumpyInitializer(orthonormal_initializer(options.label_mlp, len(self.irels) * options.label_mlp)))
         self.w_label = self.model.add_parameters((len(self.irels), 2 * options.label_mlp), init= NumpyInitializer(orthonormal_initializer(len(self.irels), 2 * options.label_mlp)))
-        self.b_label = self.model.add_parameters((len(self.irels)), init=ConstInitializer(0))
+        self.b_label = self.model.add_parameters((len(self.irels)))
 
     def __evaluate(self, H, M):
         return affine_transform([transpose(H)*self.b_arc.expr(), transpose(H), self.w_arc.expr() * M])
@@ -87,10 +91,10 @@ class MSTParserLSTM:
 
     def getLstmLayer(self, sentence, train):
         h = concatenate_cols(self.deep_lstms.transduce(self.getInputLayer(sentence, train)))
-        H = self.activation(self.arc_mlp_head.expr() * h)
-        M = self.activation(self.arc_mlp_dep.expr() * h)
-        HL = self.activation(self.label_mlp_head.expr() * h)
-        ML = self.activation(self.label_mlp_dep.expr() * h)
+        H = self.activation(affine_transform([self.arc_mlp_head_b.expr(), self.arc_mlp_head.expr(), h]))
+        M = self.activation(affine_transform([self.arc_mlp_dep_b.expr(),self.arc_mlp_dep.expr(), h]))
+        HL = self.activation(affine_transform([self.label_mlp_head_b.expr(), self.label_mlp_head.expr(), h]))
+        ML = self.activation(affine_transform([self.label_mlp_dep_b.expr(),self.label_mlp_dep.expr(), h]))
         if self.dropout and train:
             d = self.options.dropout
             H, M, HL, ML = dropout(H, d), dropout(M, d), dropout(HL, d), dropout(ML, d)

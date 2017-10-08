@@ -29,7 +29,7 @@ class MSTParserLSTM:
             self.evocab = {word: i + 1 for i, word in enumerate(external_embedding)}
 
             edim = len(external_embedding.values()[0])
-            self.wlookup = self.model.add_lookup_parameters((len(w2i) + 1, edim))
+            self.wlookup = self.model.add_lookup_parameters((len(w2i) + 1, edim), init=ConstInitializer(0))
             self.elookup = self.model.add_lookup_parameters((len(external_embedding) + 1, edim))
             self.elookup.set_updated(False)
             self.elookup.init_row(0, [0] * edim)

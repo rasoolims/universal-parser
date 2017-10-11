@@ -147,12 +147,12 @@ class MSTParserLSTM:
                 H, M, HL, ML = self.getLstmLayer(conll_sentence, True)
                 scores = self.__evaluate(H, M)
                 for modifier, entry in enumerate(conll_sentence[1:]):
-                    loss_vec.append(pickneglogsoftmax(scores[modifier + 1], entry.parent_id))
-                    loss_vec.append(
-                        pickneglogsoftmax(self.__evaluateLabel(entry.parent_id, modifier + 1, HL, ML), self.rels[entry.relation]))
+                    rel_loss = pickneglogsoftmax(self.__evaluateLabel(entry.parent_id, modifier + 1, HL, ML), self.rels[entry.relation])
+                    arc_loss = pickneglogsoftmax(scores[modifier + 1], entry.parent_id)
+                    loss_vec.append(rel_loss+arc_loss)
 
                 if len(loss_vec) >= 2 * self.options.batch:
-                    err = esum(loss_vec) / len(loss_vec)
+                    err = 0.5 * esum(loss_vec) / len(loss_vec)
                     err.scalar_value()
                     lss += err.value()
                     total += 1

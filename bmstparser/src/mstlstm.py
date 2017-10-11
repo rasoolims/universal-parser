@@ -93,7 +93,7 @@ class MSTParserLSTM:
         return embed
 
     def getLstmLayer(self, sentence, train):
-        h = concatenate_cols(self.deep_lstms.transduce(self.getInputLayer(sentence, train)))
+        h = concatenate_cols(self.transduce(sentence, train))
         H = self.activation(affine_transform([self.arc_mlp_head_b.expr(), self.arc_mlp_head.expr(), h]))
         M = self.activation(affine_transform([self.arc_mlp_dep_b.expr(),self.arc_mlp_dep.expr(), h]))
         HL = self.activation(affine_transform([self.label_mlp_head_b.expr(), self.label_mlp_head.expr(), h]))
@@ -102,6 +102,17 @@ class MSTParserLSTM:
             d = self.options.dropout
             H, M, HL, ML = dropout(H, d), dropout(M, d), dropout(HL, d), dropout(ML, d)
         return H, M, HL, ML
+
+    def transduce(self, sentence, train):
+        inputs = self.getInputLayer(sentence, train)
+        d = self.options.dropout if train else 0
+        for fb, bb in self.deep_lstms.builder_layers:
+            f, b = fb.initial_state(), bb.initial_state()
+            fb.set_dropouts(d, d)
+            bb.set_dropouts(d, d)
+            fs, bs = f.transduce(inputs), b.transduce(reversed(inputs))
+            inputs = [concatenate([f, b]) for f, b in zip(fs, reversed(bs))]
+        return inputs
 
     def Predict(self, conll_path, greedy, non_proj):
         self.deep_lstms.disable_dropout()

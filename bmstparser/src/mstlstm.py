@@ -151,7 +151,7 @@ class MSTParserLSTM:
                     arc_loss = pickneglogsoftmax(scores[modifier + 1], entry.parent_id)
                     loss_vec.append(rel_loss+arc_loss)
 
-                if len(loss_vec) >= 2 * self.options.batch:
+                if len(loss_vec) >= self.options.batch:
                     err = 0.5 * esum(loss_vec) / len(loss_vec)
                     err.scalar_value()
                     lss += err.value()

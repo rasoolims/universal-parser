@@ -85,7 +85,7 @@ class MSTParserLSTM:
             posvec = self.plookup[int(self.pos[entry.pos])] if self.options.pe > 0 else None
             vec = concatenate(filter(None, [wordvec, posvec]))
             if train:
-                vec = dropout(train, self.options.dropout)
+                vec = dropout(vec, self.options.dropout)
             embed.append(vec)
         return embed
 

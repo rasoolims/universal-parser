@@ -63,18 +63,19 @@ if __name__ == '__main__':
             print 'Starting epoch', epoch
             t, epoch = parser.Train(options.conll_train, t), epoch+1
             devpath = os.path.join(options.output, 'dev_epoch_out')
-            utils.write_conll(devpath, parser.Predict(options.conll_dev, True, False))
-            uas,las1 = utils.eval(options.conll_dev, devpath)
-            print 'greedy UAS/LAS', uas, las1
+            # utils.write_conll(devpath, parser.Predict(options.conll_dev, True, False))
+            # uas,las1 = utils.eval(options.conll_dev, devpath)
+            # print 'greedy UAS/LAS', uas, las1
 
             utils.write_conll(devpath, parser.Predict(options.conll_dev, False, False))
             uas, las2 = utils.eval(options.conll_dev, devpath)
             print 'eisner UAS/LAS',  uas, las2
 
-            utils.write_conll(devpath, parser.Predict(options.conll_dev, False, True))
-            uas, las3 = utils.eval(options.conll_dev, devpath)
-            print 'tarjan UAS/LAS', uas, las3
-            las = max(las1, max(las2, las3))
+            # utils.write_conll(devpath, parser.Predict(options.conll_dev, False, True))
+            # uas, las3 = utils.eval(options.conll_dev, devpath)
+            # print 'tarjan UAS/LAS', uas, las3
+            # las = max(las1, max(las2, las3))
+            las = las2 #todo
             if las > best_acc:
                 print 'saving model', las
                 best_acc = las

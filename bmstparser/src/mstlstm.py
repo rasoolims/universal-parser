@@ -36,8 +36,8 @@ class MSTParserLSTM:
             for word in external_embedding.keys():
                 self.elookup.init_row(self.evocab[word], external_embedding[word])
 
-            print 'Initialized with pre-trained embedding. Vector dimensions', edim, 'and', len(
-                external_embedding), 'words'
+            print 'Initialized with pre-trained embedding. Vector dimensions', edim, 'and', len(external_embedding),\
+                'words, number of training words', len(w2i) + 1
 
         self.plookup = self.model.add_lookup_parameters((len(pos) + 1, options.pe))
         self.rlookup = self.model.add_lookup_parameters((len(rels), options.re))

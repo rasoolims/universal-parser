@@ -32,7 +32,7 @@ def vocab(conll_path, min_count=2):
 
     with open(conll_path, 'r') as conllFP:
         for sentence in read_conll(conllFP):
-            wordsCount.update([node.norm for node in sentence if isinstance(node, ConllEntry)])
+            wordsCount.update([node.form for node in sentence if isinstance(node, ConllEntry)])
             posCount.update([node.pos for node in sentence if isinstance(node, ConllEntry)])
             relCount.update([node.relation for node in sentence if isinstance(node, ConllEntry)])
 

@@ -83,10 +83,12 @@ class MSTParserLSTM:
         for entry in sentence:
             wordvec = self.wlookup[int(self.vocab.get(entry.norm, 0))] if self.options.we > 0 else None
             ewordvec = self.elookup[int(self.evocab.get(entry.norm, 0))] if self.elookup else None
+            if ewordvec: wordvec = wordvec + ewordvec
             posvec = self.plookup[int(self.pos[entry.pos])] if self.options.pe > 0 else None
-            vec = concatenate(filter(None, [wordvec + ewordvec if ewordvec else wordvec, posvec]))
-            if self.dropout and train:
-                vec = dropout(vec, self.options.dropout)
+            if train:
+                wordvec = dropout(wordvec, self.options.dropout)
+                posvec = dropout(posvec, self.options.dropout)
+            vec = concatenate(filter(None, [wordvec, posvec]))
             embed.append(vec)
         return embed
 
@@ -102,6 +104,7 @@ class MSTParserLSTM:
         return H, M, HL, ML
 
     def Predict(self, conll_path, greedy, non_proj):
+        self.deep_lstms.disable_dropout()
         with codecs.open(conll_path, 'r', encoding='utf-8') as conllFP:
             for iSentence, sentence in enumerate(read_conll(conllFP)):
                 conll_sentence = [entry for entry in sentence if isinstance(entry, utils.ConllEntry)]
@@ -168,5 +171,4 @@ class MSTParserLSTM:
 
         renew_cg()
         print 'current learning rate', self.trainer.learning_rate, 't:', t
-        self.deep_lstms.disable_dropout()
         return t

@@ -83,10 +83,9 @@ class MSTParserLSTM:
             ewordvec = self.elookup[int(self.evocab.get(entry.norm, 0))] if self.elookup else None
             if ewordvec: wordvec = wordvec + ewordvec
             posvec = self.plookup[int(self.pos[entry.pos])] if self.options.pe > 0 else None
-            if train:
-                wordvec = dropout(wordvec, self.options.dropout)
-                posvec = dropout(posvec, self.options.dropout)
             vec = concatenate(filter(None, [wordvec, posvec]))
+            if train:
+                vec = dropout(train, self.options.dropout)
             embed.append(vec)
         return embed
 

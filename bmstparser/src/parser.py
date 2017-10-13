@@ -80,3 +80,13 @@ if __name__ == '__main__':
                 print 'saving model', las
                 best_acc = las
                 parser.Save(os.path.join(options.output, os.path.basename(options.model)))
+
+            avg_model = mstlstm.MSTParserLSTM(pos, rels, w2i, options, parser)
+            utils.write_conll(devpath, avg_model.Predict(options.conll_dev, False, False))
+            uas, las = utils.eval(options.conll_dev, devpath)
+            print 'eisner avg UAS/LAS', uas, las2
+
+            if las > best_acc:
+                print 'saving avg model', las
+                best_acc = las
+                avg_model.Save(os.path.join(options.output, os.path.basename(options.model)))

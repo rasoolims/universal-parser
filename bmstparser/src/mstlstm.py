@@ -176,8 +176,8 @@ class MSTParserLSTM:
         Here, I assumed all sens have the same length.
         '''
         sen_l = len(sens[0])
-        # if len(sens) > 1:
-        #     print ''
+        if len(sens) > 1:
+            print ''
         words = [[self.vocab.get(sens[i][j].form, 0) for i in range(len(sens))] for j in range(sen_l)]
         pwords = [[self.evocab.get(sens[i][j].form, 0)  for i in range(len(sens))] for j in range(sen_l)]
         pos = [[self.pos.get(sens[i][j].pos, 0)  for i in range(len(sens))] for j in range(sen_l)]
@@ -204,6 +204,9 @@ class MSTParserLSTM:
             d = self.options.dropout
             H, M, HL, ML = dropout(H, d), dropout(M, d), dropout(HL, d), dropout(ML, d)
 
+        # print H.value()
+        # print (reshape(H, (H.dim()[1], H.dim()[0][0]))).value()
+        # print transpose(reshape(H, (H.dim()[1], H.dim()[0][0]))).value()
         H = (reshape(H, (H.dim()[0][0], H.dim()[1])))
         M = (reshape(M, (M.dim()[0][0], M.dim()[1])))
         HL = (reshape(HL, (HL.dim()[0][0], HL.dim()[1])))
@@ -283,7 +286,7 @@ class MSTParserLSTM:
                     last_len = len(d)
                 else:
                     batch.append(d)
-                cur_len += len(d)
+                cur_len += len(d) - 1
                 if cur_len>=self.options.batch:
                     mini_batches.append(batch)
                     batch, cur_len = [], 0

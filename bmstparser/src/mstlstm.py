@@ -204,7 +204,6 @@ class MSTParserLSTM:
             d = self.options.dropout
             H, M, HL, ML = dropout(H, d), dropout(M, d), dropout(HL, d), dropout(ML, d)
 
-
         H = (reshape(H, (H.dim()[0][0], H.dim()[1])))
         M = (reshape(M, (M.dim()[0][0], M.dim()[1])))
         HL = (reshape(HL, (HL.dim()[0][0], HL.dim()[1])))
@@ -292,6 +291,7 @@ class MSTParserLSTM:
         i_s,lss, total, start = 0, 0, 0, time.time()
         random.shuffle(mini_batches)
 
+        print 'created mini-batches for this epoch'
         for mini_batch in mini_batches:
             H, M, HL, ML = [], [], [], []
             sentences, cur_len = [mini_batch[0]], len(mini_batch[0])

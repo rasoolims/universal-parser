@@ -75,9 +75,9 @@ if __name__ == '__main__':
             # uas,las1 = utils.eval(options.conll_dev, devpath)
             # print 'greedy UAS/LAS', uas, las1
 
-            utils.write_conll(devpath, parser.Predict(options.conll_dev, False, False))
-            uas, las2 = utils.eval(options.conll_dev, devpath)
-            print 'eisner UAS/LAS',  uas, las2
+            # utils.write_conll(devpath, parser.Predict(options.conll_dev, False, False))
+            # uas, las2 = utils.eval(options.conll_dev, devpath)
+            # print 'eisner UAS/LAS',  uas, las2
 
             # utils.write_conll(devpath, parser.Predict(options.conll_dev, False, True))
             # uas, las3 = utils.eval(options.conll_dev, devpath)

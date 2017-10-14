@@ -59,9 +59,17 @@ if __name__ == '__main__':
         parser = mstlstm.MSTParserLSTM(pos, rels, w2i, options)
         best_acc = -float('inf')
         t, epoch = 0,1
+        train_data = list(utils.read_conll(open(options.conll_train, 'r')))
+        max_len = max([len(d) for d in train_data])
+        min_len = min([len(d) for d in train_data])
+        buckets = [list() for i in range(min_len, max_len)]
+        for d in train_data:
+            buckets[len(d)-min_len-1].append(d)
+        buckets = [x for x in buckets if x != []]
+
         while t<=options.t:
             print 'Starting epoch', epoch
-            t, epoch = parser.Train(options.conll_train, t), epoch+1
+            t, epoch = parser.Train(buckets, t), epoch+1
             devpath = os.path.join(options.output, 'dev_epoch_out')
             # utils.write_conll(devpath, parser.Predict(options.conll_dev, True, False))
             # uas,las1 = utils.eval(options.conll_dev, devpath)

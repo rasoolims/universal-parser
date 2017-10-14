@@ -170,6 +170,68 @@ class MSTParserLSTM:
             H, M, HL, ML = dropout(H, d), dropout(M, d), dropout(HL, d), dropout(ML, d)
         return H, M, HL, ML
 
+
+    def rnn_batch(self, sens, train):
+        '''
+        Here, I assumed all sens have the same length.
+        '''
+        sen_l = len(sens[0])
+        # if len(sens) > 1:
+        #     print ''
+        words = [[self.vocab.get(sens[i][j].form, 0) for i in range(len(sens))] for j in range(sen_l)]
+        pwords = [[self.evocab.get(sens[i][j].form, 0)  for i in range(len(sens))] for j in range(sen_l)]
+        pos = [[self.pos.get(sens[i][j].pos, 0)  for i in range(len(sens))] for j in range(sen_l)]
+        wembed = [lookup_batch(self.wlookup, words[i]) for i in range(len(words))]
+        pwembed = [lookup_batch(self.elookup, pwords[i]) for i in range(len(pwords))]
+        posembed = [lookup_batch(self.plookup, pos[i]) for i in range(len(pos))]
+
+        inputs = [concatenate([wembed[i]+pwembed[i], posembed[i]]) for i in range(len(words))]
+        if train:
+            self.deep_lstms.set_dropout(self.options.dropout)
+        else:
+            self.deep_lstms.disable_dropout()
+        outputs = self.deep_lstms.transduce(inputs)
+        if inputs[0].dim()[1] != outputs[0].dim()[1]:
+            print 'mismatch',inputs[0].dim(), outputs[0].dim()
+        assert inputs[0].dim()[1] == outputs[0].dim()[1], str(inputs[0].dim()[1]) + ' ' + str(outputs[0].dim()[1])
+        h = concatenate_to_batch(outputs)
+        H = self.activation(affine_transform([self.arc_mlp_head_b.expr(), self.arc_mlp_head.expr(), h]))
+        M = self.activation(affine_transform([self.arc_mlp_dep_b.expr(), self.arc_mlp_dep.expr(), h]))
+        HL = self.activation(affine_transform([self.label_mlp_head_b.expr(), self.label_mlp_head.expr(), h]))
+        ML = self.activation(affine_transform([self.label_mlp_dep_b.expr(), self.label_mlp_dep.expr(), h]))
+
+        if self.dropout and train:
+            d = self.options.dropout
+            H, M, HL, ML = dropout(H, d), dropout(M, d), dropout(HL, d), dropout(ML, d)
+
+
+        H = (reshape(H, (H.dim()[0][0], H.dim()[1])))
+        M = (reshape(M, (M.dim()[0][0], M.dim()[1])))
+        HL = (reshape(HL, (HL.dim()[0][0], HL.dim()[1])))
+        ML = (reshape(ML, (ML.dim()[0][0], ML.dim()[1])))
+
+        H = transpose(H)
+        M = transpose(M)
+        HL = transpose(HL)
+        ML = transpose(ML)
+
+        fH, fM, fHL, fML = [list() for _ in range(len(sens))], [list() for _ in range(len(sens))], [list() for _ in range(len(sens))],[list() for _ in range(len(sens))]
+        k = 0
+        for j in range(sen_l):
+            for i in range(len(sens)):
+                fH[i].append(H[k])
+                fM[i].append(M[k])
+                fHL[i].append(HL[k])
+                fML[i].append(ML[k])
+                k += 1
+
+        for i in range(len(sens)):
+            fH[i] = concatenate_cols(fH[i])
+            fM[i] = concatenate_cols(fM[i])
+            fHL[i] = concatenate_cols(fHL[i])
+            fML[i] = concatenate_cols(fML[i])
+        return fH, fM, fHL, fML
+
     def Predict(self, conll_path, greedy, non_proj):
         self.deep_lstms.disable_dropout()
         with codecs.open(conll_path, 'r', encoding='utf-8') as conllFP:
@@ -203,39 +265,80 @@ class MSTParserLSTM:
                 renew_cg()
                 yield sentence
 
-    def Train(self, conll_path, t):
+    def Train(self, train_buckets, t):
         self.deep_lstms.set_dropout(self.options.dropout)
-        with open(conll_path, 'r') as conllFP:
-            shuffledData = list(read_conll(conllFP))
-            random.shuffle(shuffledData)
-            start, lss, total, loss_vec = time.time(), 0, 0, []
-            for i_s, sentence in enumerate(shuffledData):
-                conll_sentence = [entry for entry in sentence if isinstance(entry, utils.ConllEntry)]
-                H, M, HL, ML = self.getLstmLayer(conll_sentence, True)
-                scores = self.__evaluate(H, M)
-                for modifier, entry in enumerate(conll_sentence[1:]):
-                    rel_loss = pickneglogsoftmax(self.__evaluateLabel(entry.parent_id, modifier + 1, HL, ML), self.rels[entry.relation])
-                    arc_loss = pickneglogsoftmax(scores[modifier + 1], entry.parent_id)
-                    loss_vec.append(rel_loss+arc_loss)
 
-                if len(loss_vec) >= self.options.batch:
-                    err = 0.5 * esum(loss_vec) / len(loss_vec)
-                    err.scalar_value()
-                    lss += err.value()
-                    total += 1
-                    if total % 10 == 0:
-                        print 'Processing sentence:', i_s + 1, 'Loss:', float(lss) / total, 'Time', time.time() - start
-                        lss, total, start = 0, 0, time.time()
-                    err.backward()
-                    self.trainer.update()
-                    renew_cg()
-                    ratio = min(0.9999, float(t) / (9 + t))
-                    self.moving_avg(ratio, 1 - ratio)
-                    loss_vec, t = [], t + 1
-                    if self.options.anneal:
-                        decay_steps = min(1.0, float(t) / 50000)
-                        lr = self.options.lr * 0.75 ** decay_steps
-                        self.trainer.learning_rate = lr
+        train_copy = [train_buckets[i][:] for i in range(len(train_buckets))]
+        for tc in train_copy:
+            random.shuffle(tc)
+        mini_batches = []
+        batch, cur_len = [], 0
+        last_len = len(train_copy[0][0])
+        for tc in train_copy:
+            for d in tc:
+                if last_len!=len(d):
+                    if len(batch)>0:
+                        mini_batches.append(batch)
+                    batch, cur_len = [], 0
+                    batch.append(d)
+                    last_len = len(d)
+                else:
+                    batch.append(d)
+                cur_len += len(d)
+                if cur_len>=self.options.batch:
+                    mini_batches.append(batch)
+                    batch, cur_len = [], 0
+                    last_len = len(d)
+        i_s,lss, total, start = 0, 0, 0, time.time()
+        random.shuffle(mini_batches)
+
+        for mini_batch in mini_batches:
+            H, M, HL, ML = [], [], [], []
+            sentences, cur_len = [mini_batch[0]], len(mini_batch[0])
+            for j in range(1, len(mini_batch)):
+                if len(mini_batch[j])!=cur_len:
+                    res = self.rnn_batch(sentences, True)
+                    H += res[0]
+                    M += res[1]
+                    HL += res[2]
+                    ML += res[3]
+                    sentences, cur_len = [mini_batch[j]], len(mini_batch[j])
+                else:
+                    sentences.append(mini_batch[j])
+
+            res = self.rnn_batch(sentences, True)
+            H += res[0]
+            M += res[1]
+            HL += res[2]
+            ML += res[3]
+
+            loss_vec = []
+            for s in range(len(H)):
+                i_s +=1
+                scores = self.__evaluate(H[s], M[s])
+                for modifier, entry in enumerate(mini_batch[s][1:]): # todo make it batch pick
+                    label_score = self.__evaluateLabel(entry.head, modifier + 1, HL[s], ML[s])
+                    rel_loss = pickneglogsoftmax(label_score, self.rels[entry.relation])
+                    arc_loss = pickneglogsoftmax(scores[modifier + 1], entry.head)
+                    loss_vec.append(rel_loss + arc_loss)
+
+            err = 0.5 * esum(loss_vec) / len(loss_vec)
+            err.scalar_value()
+            lss += err.value()
+            total += 1
+            if total % 10 == 0:
+                print 'Processing sentence:', i_s , 'Loss:', float(lss) / total, 'Time', time.time() - start
+                lss, total, start = 0, 0, time.time()
+            err.backward()
+            self.trainer.update()
+            renew_cg()
+            ratio = min(0.9999, float(t) / (9 + t))
+            self.moving_avg(ratio, 1 - ratio)
+            loss_vec, t = [], t + 1
+            if self.options.anneal:
+                decay_steps = min(1.0, float(t) / 50000)
+                lr = self.options.lr * 0.75 ** decay_steps
+                self.trainer.learning_rate = lr
 
         renew_cg()
         print 'current learning rate', self.trainer.learning_rate, 't:', t

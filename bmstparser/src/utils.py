@@ -4,13 +4,13 @@ reload(sys)
 sys.setdefaultencoding('utf8')
 
 class ConllEntry:
-    def __init__(self, id, form, lemma, pos, cpos, feats=None, parent_id=None, relation=None, deps=None, misc=None):
+    def __init__(self, id, form, lemma, pos, fpos, feats=None, head=None, relation=None, deps=None, misc=None):
         self.id = id
         self.form = form
         self.norm = normalize(form)
-        self.cpos = cpos.upper()
+        self.fpos = fpos.upper()
         self.pos = pos.upper()
-        self.parent_id = parent_id
+        self.head = head
         self.relation = relation
 
         self.lemma = lemma
@@ -22,7 +22,7 @@ class ConllEntry:
         self.pred_relation = None
 
     def __str__(self):
-        values = [str(self.id), self.form, self.lemma, self.cpos, self.pos, self.feats, str(self.pred_parent_id) if self.pred_parent_id is not None else None, self.pred_relation, self.deps, self.misc]
+        values = [str(self.id), self.form, self.lemma, self.pos, self.fpos, self.feats, str(self.pred_parent_id) if self.pred_parent_id is not None else None, self.pred_relation, self.deps, self.misc]
         return '\t'.join(['_' if v is None else v for v in values])
 
 def vocab(conll_path, min_count=2):
@@ -43,7 +43,7 @@ def vocab(conll_path, min_count=2):
     return ({w: i for i, w in enumerate(words)}, posCount.keys(), relCount.keys())
 
 def read_conll(fh):
-    root = ConllEntry(0, '*root*', '*root*', 'ROOT-POS', 'ROOT-CPOS', '_', -1, 'rroot', '_', '_')
+    root = ConllEntry(0, '*root*', '*root*', 'ROOT-POS', 'ROOT-FPOS', '_', -1, 'rroot', '_', '_')
     tokens = [root]
     for line in fh:
         tok = line.strip().split('\t')

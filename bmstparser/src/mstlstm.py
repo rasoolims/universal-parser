@@ -176,8 +176,6 @@ class MSTParserLSTM:
         Here, I assumed all sens have the same length.
         '''
         sen_l = len(sens[0])
-        if len(sens) > 1:
-            print ''
         words = [[self.vocab.get(sens[i][j].form, 0) for i in range(len(sens))] for j in range(sen_l)]
         pwords = [[self.evocab.get(sens[i][j].form, 0)  for i in range(len(sens))] for j in range(sen_l)]
         pos = [[self.pos.get(sens[i][j].pos, 0)  for i in range(len(sens))] for j in range(sen_l)]

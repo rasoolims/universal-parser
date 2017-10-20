@@ -1,6 +1,36 @@
 from optparse import OptionParser
-import pickle, utils, mstlstm, os, os.path, time
+import pickle, utils, mstlstm, sys, os.path, time
 
+
+def test(parser, buckets, test_file, output_file):
+    results = list()
+    for mini_batch in utils.get_batches(buckets, parser, False):
+        outputs = parser.build_graph(mini_batch, 1, False)
+        for output in outputs:
+            results.append(output)
+
+    arcs = reduce(lambda x, y: x + y, [list(result[0]) for result in results])
+    rels = reduce(lambda x, y: x + y, [list(result[1]) for result in results])
+    idx = 0
+    with open(test_file) as f:
+        with open(output_file, 'w') as fo:
+            for line in f.readlines():
+                info = line.strip().split()
+                if info:
+                    assert len(info) == 10, 'Illegal line: %s' % line
+                    info[6] = str(arcs[idx])
+                    info[7] = parser.irels[rels[idx]]
+                    fo.write('\t'.join(info) + '\n')
+                    idx += 1
+                else:
+                    fo.write('\n')
+
+    os.system('perl utils/eval.pl -q -b -g %s -s %s -o tmp' % (test_file, output_file))
+    os.system('tail -n 3 tmp > score_tmp')
+    LAS, UAS = [float(line.strip().split()[-2]) for line in open('score_tmp').readlines()[:2]]
+    print 'LAS %.2f, UAS %.2f' % (LAS, UAS)
+    os.system('rm tmp score_tmp')
+    return LAS, UAS
 
 if __name__ == '__main__':
     parser = OptionParser()
@@ -66,35 +96,28 @@ if __name__ == '__main__':
         for d in train_data:
             buckets[len(d)-min_len-1].append(d)
         buckets = [x for x in buckets if x != []]
+        dev_buckets = [list()]
+        dev_data = list(utils.read_conll(open(options.conll_dev, 'r')))
+        for d in dev_data:
+            dev_buckets[0].append(d)
+        dev_batches = utils.get_batches(dev_buckets, parser, False)
 
         while t<=options.t:
             print 'Starting epoch', epoch
-            t, epoch = parser.Train(buckets, t), epoch+1
-            devpath = os.path.join(options.output, 'dev_epoch_out')
-            # utils.write_conll(devpath, parser.Predict(options.conll_dev, True, False))
-            # uas,las1 = utils.eval(options.conll_dev, devpath)
-            # print 'greedy UAS/LAS', uas, las1
-
-            # utils.write_conll(devpath, parser.Predict(options.conll_dev, False, False))
-            # uas, las2 = utils.eval(options.conll_dev, devpath)
-            # print 'eisner UAS/LAS',  uas, las2
-
-            # utils.write_conll(devpath, parser.Predict(options.conll_dev, False, True))
-            # uas, las3 = utils.eval(options.conll_dev, devpath)
-            # print 'tarjan UAS/LAS', uas, las3
-            # las = max(las1, max(las2, las3))
-            las = las2 #todo
-            if las > best_acc:
-                print 'saving model', las
-                best_acc = las
-                parser.Save(os.path.join(options.output, os.path.basename(options.model)))
-
+            mini_batches = utils.get_batches(buckets, parser, True)
+            start, closs = time.time(), 0
+            for i, minibatch in enumerate(mini_batches):
+                t, loss = parser.build_graph(minibatch, t, True)
+                if parser.options.anneal:
+                    decay_steps = min(1.0, float(t) / 50000)
+                    lr = parser.options.lr * 0.75 ** decay_steps
+                    parser.trainer.learning_rate = lr
+                closs += loss
+                if t%100==0:
+                    sys.stdout.write('overall progress:'+str(round(100*float(t)/options.t,2))+'% current progress:' + str(round(100*float(i+1)/len(mini_batches),2)) + '% loss='+ str(closs/10) +' time: ' + str( time.time()-start) + '\n')
+                    las,uas = test(parser, dev_buckets, options.conll_dev, options.output+'/dev.out')
+                    start, closs = time.time(), 0
+            print 'current learning rate', parser.trainer.learning_rate, 't:', t
+            epoch+=1
             avg_model = mstlstm.MSTParserLSTM(pos, rels, w2i, options, parser)
-            utils.write_conll(devpath, avg_model.Predict(options.conll_dev, False, False))
-            uas, las = utils.eval(options.conll_dev, devpath)
-            print 'eisner avg UAS/LAS', uas, las
 
-            if las > best_acc:
-                print 'saving avg model', las
-                best_acc = las
-                avg_model.Save(os.path.join(options.output, os.path.basename(options.model)))

@@ -9,38 +9,41 @@ from linalg import *
 class MSTParserLSTM:
     def __init__(self, pos, rels, w2i, options, from_model=None):
         self.model = Model()
+        self.PAD = 1
         self.options = options
         self.trainer = AdamTrainer(self.model, options.lr, options.beta1, options.beta2)
         self.activations = {'tanh': tanh, 'sigmoid': logistic, 'relu': rectify, 'leaky': (lambda x: bmax(.1 * x, x))}
         self.activation = self.activations[options.activation]
         self.dropout = False if options.dropout == 0.0 else True
-        self.vocab = {word: ind + 1 for word, ind in w2i.iteritems()}
-        self.pos = {word: ind + 1 for ind, word in enumerate(pos)}
-        self.rels = {word: ind for ind, word in enumerate(rels)}
-        self.irels = rels
+        self.vocab = {word: ind + 2 for word, ind in w2i.iteritems()}
+        self.pos = {word: ind + 2 for ind, word in enumerate(pos)}
+        self.rels = {word: ind + 1 for ind, word in enumerate(rels)}
+        self.root_id = self.rels['root']
+        self.irels = ['PAD'] + rels
+        self.PAD_REL = 0
         edim = options.we
         if not from_model:
-            self.wlookup = self.model.add_lookup_parameters((len(w2i) + 1, edim))
+            self.wlookup = self.model.add_lookup_parameters((len(w2i) + 2, edim))
             self.elookup = None
             if options.external_embedding is not None:
                 external_embedding_fp = open(options.external_embedding, 'r')
                 external_embedding = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in
                                       external_embedding_fp if len(line.split(' ')) > 2}
                 external_embedding_fp.close()
-                self.evocab = {word: i + 1 for i, word in enumerate(external_embedding)}
+                self.evocab = {word: i + 2 for i, word in enumerate(external_embedding)}
 
                 edim = len(external_embedding.values()[0])
-                self.wlookup = self.model.add_lookup_parameters((len(w2i) + 1, edim), init=ConstInitializer(0))
-                self.elookup = self.model.add_lookup_parameters((len(external_embedding) + 1, edim))
+                self.wlookup = self.model.add_lookup_parameters((len(w2i) + 2, edim), init=ConstInitializer(0))
+                self.elookup = self.model.add_lookup_parameters((len(external_embedding) + 2, edim))
                 self.elookup.set_updated(False)
                 self.elookup.init_row(0, [0] * edim)
                 for word in external_embedding.keys():
                     self.elookup.init_row(self.evocab[word], external_embedding[word])
 
                 print 'Initialized with pre-trained embedding. Vector dimensions', edim, 'and', len(external_embedding),\
-                    'words, number of training words', len(w2i) + 1
+                    'words, number of training words', len(w2i) + 2
 
-            self.plookup = self.model.add_lookup_parameters((len(pos) + 1, options.pe))
+            self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe))
             self.deep_lstms = BiRNNBuilder(options.layer, edim + options.pe, options.rnn * 2, self.model, VanillaLSTMBuilder)
             for i in range(len(self.deep_lstms.builder_layers)):
                 builder = self.deep_lstms.builder_layers[i]
@@ -58,10 +61,10 @@ class MSTParserLSTM:
             self.label_mlp_dep = self.model.add_parameters((options.label_mlp, options.rnn * 2), init= NumpyInitializer(w_mlp_label))
             self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init = ConstInitializer(0))
             self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp+1), init = ConstInitializer(0))
-            self.u_label = self.model.add_parameters((options.label_mlp+1, len(self.irels) * (options.label_mlp+1)), init = ConstInitializer(0))
+            self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp+1), options.label_mlp+1), init = ConstInitializer(0))
 
-            self.a_wlookup = np.ndarray(shape=(options.we, len(w2i)+1), dtype=float)
-            self.a_plookup = np.ndarray(shape=(options.pe, len(pos)+1), dtype=float)
+            self.a_wlookup = np.ndarray(shape=(options.we, len(w2i)+2), dtype=float)
+            self.a_plookup = np.ndarray(shape=(options.pe, len(pos)+2), dtype=float)
             self.a_arc_mlp_head = np.ndarray(shape=(options.arc_mlp, options.rnn * 2), dtype=float)
             self.a_arc_mlp_head_b = np.ndarray(shape=(options.arc_mlp,), dtype=float)
             self.a_label_mlp_head = np.ndarray(shape=(options.label_mlp, options.rnn * 2), dtype=float)
@@ -71,7 +74,7 @@ class MSTParserLSTM:
             self.a_label_mlp_dep = np.ndarray(shape=(options.label_mlp, options.rnn * 2), dtype=float)
             self.a_label_mlp_dep_b =  np.ndarray(shape=(options.label_mlp,), dtype=float)
             self.a_w_arc = np.ndarray(shape=(options.arc_mlp,options.arc_mlp+1), dtype=float)
-            self.a_u_label = np.ndarray(shape=(options.label_mlp + 1, len(self.irels) * (options.label_mlp + 1)), dtype=float)
+            self.a_u_label = np.ndarray(shape=(len(self.irels) * (options.label_mlp + 1), options.label_mlp + 1), dtype=float)
 
             self.a_lstms = []
             for i in range(len(self.deep_lstms.builder_layers)):
@@ -86,11 +89,11 @@ class MSTParserLSTM:
                         this_layer.append(np.ndarray(shape=(dim[0][0],dim[0][1]), dtype=float))
                 self.a_lstms.append(this_layer)
         else:
-            self.wlookup = self.model.add_lookup_parameters((len(w2i) + 1, edim), init=NumpyInitializer(from_model.a_wlookup))
+            self.wlookup = self.model.add_lookup_parameters((len(w2i) + 2, edim), init=NumpyInitializer(from_model.a_wlookup))
             if from_model.evocab:
                 self.evocab = from_model.evocab
-                self.elookup =  self.model.add_lookup_parameters((len(self.evocab) + 1, edim), init=NumpyInitializer(from_model.elookup.expr().npvalue()))
-            self.plookup = self.model.add_lookup_parameters((len(pos) + 1, options.pe), init=NumpyInitializer(from_model.a_plookup))
+                self.elookup =  self.model.add_lookup_parameters((len(self.evocab) + 2, edim), init=NumpyInitializer(from_model.elookup.expr().npvalue()))
+            self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe), init=NumpyInitializer(from_model.a_plookup))
             self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init=NumpyInitializer(from_model.a_arc_mlp_head))
             self.arc_mlp_head_b = self.model.add_parameters((options.arc_mlp,),init=NumpyInitializer(from_model.a_arc_mlp_head_b))
             self.label_mlp_head = self.model.add_parameters((options.label_mlp, options.rnn * 2),init=NumpyInitializer(from_model.a_label_mlp_head))
@@ -100,7 +103,7 @@ class MSTParserLSTM:
             self.label_mlp_dep = self.model.add_parameters((options.label_mlp, options.rnn * 2), init = NumpyInitializer(from_model.a_label_mlp_dep))
             self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init = NumpyInitializer(from_model.a_label_mlp_dep_b))
             self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp + 1), init = NumpyInitializer(from_model.a_w_arc))
-            self.u_label = self.model.add_parameters((options.label_mlp + 1, len(self.irels) * (options.label_mlp + 1)),init = NumpyInitializer(from_model.a_u_label))
+            self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp + 1), options.label_mlp + 1),init = NumpyInitializer(from_model.a_u_label))
             self.deep_lstms = BiRNNBuilder(options.layer, edim + options.pe, options.rnn * 2, self.model, VanillaLSTMBuilder)
             for i in range(len(self.deep_lstms.builder_layers)):
                 builder = self.deep_lstms.builder_layers[i]
@@ -129,6 +132,25 @@ class MSTParserLSTM:
                 self.a_lstms[i][j] = r1 * self.a_lstms[i][j] + r2 * params[j].expr().npvalue()
 
         renew_cg()
+
+    def bilinear(self, M, W, H, input_size, seq_len, batch_size, num_outputs=1, bias_x=False, bias_y=False):
+        # x,y: (input_size x seq_len) x batch_size
+        if bias_x:
+            M = concatenate([M, inputTensor(np.ones((1, seq_len), dtype=np.float32))])
+        if bias_y:
+            H = concatenate([H, inputTensor(np.ones((1, seq_len), dtype=np.float32))])
+
+        nx, ny = input_size + bias_x, input_size + bias_y
+        # W: (num_outputs x ny) x nx
+        lin = W * M
+        if num_outputs > 1:
+            lin = reshape(lin, (ny, num_outputs * seq_len), batch_size=batch_size)
+        blin = transpose(H) * lin
+        if num_outputs > 1:
+            blin = reshape(blin, (seq_len, num_outputs, seq_len), batch_size=batch_size)
+        # seq_len_y x seq_len_x if output_size == 1
+        # seq_len_y x num_outputs x seq_len_x else
+        return blin
 
     def __evaluate(self, H, M):
         M2 = concatenate([M, inputTensor(np.ones((1, M.dim()[0][1]), dtype=np.float32))])
@@ -170,29 +192,23 @@ class MSTParserLSTM:
             H, M, HL, ML = dropout(H, d), dropout(M, d), dropout(HL, d), dropout(ML, d)
         return H, M, HL, ML
 
-
     def rnn_batch(self, sens, train):
         '''
         Here, I assumed all sens have the same length.
         '''
-        sen_l = len(sens[0])
-        words = [[self.vocab.get(sens[i][j].form, 0) for i in range(len(sens))] for j in range(sen_l)]
-        pwords = [[self.evocab.get(sens[i][j].form, 0)  for i in range(len(sens))] for j in range(sen_l)]
-        pos = [[self.pos.get(sens[i][j].pos, 0)  for i in range(len(sens))] for j in range(sen_l)]
+        words,pwords,pos = sens[0], sens[1], sens[2]
         wembed = [lookup_batch(self.wlookup, words[i]) for i in range(len(words))]
         pwembed = [lookup_batch(self.elookup, pwords[i]) for i in range(len(pwords))]
         posembed = [lookup_batch(self.plookup, pos[i]) for i in range(len(pos))]
 
         inputs = [concatenate([wembed[i]+pwembed[i], posembed[i]]) for i in range(len(words))]
         if train:
+            inputs = [dropout(input, self.options.dropout) for input in inputs]
             self.deep_lstms.set_dropout(self.options.dropout)
         else:
             self.deep_lstms.disable_dropout()
-        outputs = self.deep_lstms.transduce(inputs)
-        if inputs[0].dim()[1] != outputs[0].dim()[1]:
-            print 'mismatch',inputs[0].dim(), outputs[0].dim()
-        assert inputs[0].dim()[1] == outputs[0].dim()[1], str(inputs[0].dim()[1]) + ' ' + str(outputs[0].dim()[1])
-        h = concatenate_to_batch(outputs)
+        h_out = self.deep_lstms.transduce(inputs)
+        h = concatenate_cols(h_out)
         H = self.activation(affine_transform([self.arc_mlp_head_b.expr(), self.arc_mlp_head.expr(), h]))
         M = self.activation(affine_transform([self.arc_mlp_dep_b.expr(), self.arc_mlp_dep.expr(), h]))
         HL = self.activation(affine_transform([self.label_mlp_head_b.expr(), self.label_mlp_head.expr(), h]))
@@ -201,36 +217,7 @@ class MSTParserLSTM:
         if self.dropout and train:
             d = self.options.dropout
             H, M, HL, ML = dropout(H, d), dropout(M, d), dropout(HL, d), dropout(ML, d)
-
-        # print H.value()
-        # print (reshape(H, (H.dim()[1], H.dim()[0][0]))).value()
-        # print transpose(reshape(H, (H.dim()[1], H.dim()[0][0]))).value()
-        H = (reshape(H, (H.dim()[0][0], H.dim()[1])))
-        M = (reshape(M, (M.dim()[0][0], M.dim()[1])))
-        HL = (reshape(HL, (HL.dim()[0][0], HL.dim()[1])))
-        ML = (reshape(ML, (ML.dim()[0][0], ML.dim()[1])))
-
-        H = transpose(H)
-        M = transpose(M)
-        HL = transpose(HL)
-        ML = transpose(ML)
-
-        fH, fM, fHL, fML = [list() for _ in range(len(sens))], [list() for _ in range(len(sens))], [list() for _ in range(len(sens))],[list() for _ in range(len(sens))]
-        k = 0
-        for j in range(sen_l):
-            for i in range(len(sens)):
-                fH[i].append(H[k])
-                fM[i].append(M[k])
-                fHL[i].append(HL[k])
-                fML[i].append(ML[k])
-                k += 1
-
-        for i in range(len(sens)):
-            fH[i] = concatenate_cols(fH[i])
-            fM[i] = concatenate_cols(fM[i])
-            fHL[i] = concatenate_cols(fHL[i])
-            fML[i] = concatenate_cols(fML[i])
-        return fH, fM, fHL, fML
+        return H, M, HL, ML
 
     def Predict(self, conll_path, greedy, non_proj):
         self.deep_lstms.disable_dropout()
@@ -265,82 +252,48 @@ class MSTParserLSTM:
                 renew_cg()
                 yield sentence
 
-    def Train(self, train_buckets, t):
-        self.deep_lstms.set_dropout(self.options.dropout)
-
-        train_copy = [train_buckets[i][:] for i in range(len(train_buckets))]
-        for tc in train_copy:
-            random.shuffle(tc)
-        mini_batches = []
-        batch, cur_len = [], 0
-        last_len = len(train_copy[0][0])
-        for tc in train_copy:
-            for d in tc:
-                if last_len!=len(d):
-                    if len(batch)>0:
-                        mini_batches.append(batch)
-                    batch, cur_len = [], 0
-                    batch.append(d)
-                    last_len = len(d)
-                else:
-                    batch.append(d)
-                cur_len += len(d) - 1
-                if cur_len>=self.options.batch:
-                    mini_batches.append(batch)
-                    batch, cur_len = [], 0
-                    last_len = len(d)
-        i_s,lss, total, start = 0, 0, 0, time.time()
-        random.shuffle(mini_batches)
-
-        print 'created mini-batches for this epoch'
-        for mini_batch in mini_batches:
-            H, M, HL, ML = [], [], [], []
-            sentences, cur_len = [mini_batch[0]], len(mini_batch[0])
-            for j in range(1, len(mini_batch)):
-                if len(mini_batch[j])!=cur_len:
-                    res = self.rnn_batch(sentences, True)
-                    H += res[0]
-                    M += res[1]
-                    HL += res[2]
-                    ML += res[3]
-                    sentences, cur_len = [mini_batch[j]], len(mini_batch[j])
-                else:
-                    sentences.append(mini_batch[j])
-
-            res = self.rnn_batch(sentences, True)
-            H += res[0]
-            M += res[1]
-            HL += res[2]
-            ML += res[3]
-
-            loss_vec = []
-            for s in range(len(H)):
-                i_s +=1
-                scores = self.__evaluate(H[s], M[s])
-                for modifier, entry in enumerate(mini_batch[s][1:]): # todo make it batch pick
-                    label_score = self.__evaluateLabel(entry.head, modifier + 1, HL[s], ML[s])
-                    rel_loss = pickneglogsoftmax(label_score, self.rels[entry.relation])
-                    arc_loss = pickneglogsoftmax(scores[modifier + 1], entry.head)
-                    loss_vec.append(rel_loss + arc_loss)
-
-            err = 0.5 * esum(loss_vec) / len(loss_vec)
+    def build_graph(self, mini_batch, t=1, train=True):
+        H, M, HL, ML = self.rnn_batch(mini_batch, train)
+        arc_scores = self.bilinear(M, self.w_arc.expr(), H, self.options.arc_mlp, mini_batch[0].shape[0], mini_batch[0].shape[1],1, True, False)
+        rel_scores = self.bilinear(ML, self.u_label.expr(), HL, self.options.label_mlp, mini_batch[0].shape[0], mini_batch[0].shape[1], len(self.irels), True, True)
+        flat_scores = reshape(arc_scores, (mini_batch[0].shape[0],), mini_batch[0].shape[0]* mini_batch[0].shape[1])
+        flat_rel_scores = reshape(rel_scores, (mini_batch[0].shape[0], len(self.irels)), mini_batch[0].shape[0]* mini_batch[0].shape[1])
+        heads = np.reshape(mini_batch[3], (-1,), 'F') if train else np.reshape(arc_scores.npvalue().argmax(0), (-1,), 'F')
+        partial_rel_scores = pick_batch(flat_rel_scores, heads)
+        masks = np.reshape(mini_batch[5], (-1,), 'F')
+        mask_1D_tensor = inputTensor(masks, batched=True)
+        n_tokens = np.sum(masks)
+        if train:
+            gold_relations = np.reshape(mini_batch[4], (-1,), 'F')
+            arc_losses = pickneglogsoftmax_batch(flat_scores, heads)
+            arc_loss = sum_batches(arc_losses*mask_1D_tensor)/n_tokens
+            rel_losses = pickneglogsoftmax_batch(partial_rel_scores, gold_relations)
+            rel_loss = sum_batches(rel_losses*mask_1D_tensor)/n_tokens
+            err = 0.5 * (arc_loss + rel_loss)
             err.scalar_value()
-            lss += err.value()
-            total += 1
-            if total % 10 == 0:
-                print 'Processing sentence:', i_s , 'Loss:', float(lss) / total, 'Time', time.time() - start
-                lss, total, start = 0, 0, time.time()
+            loss = err.value()
             err.backward()
             self.trainer.update()
             renew_cg()
             ratio = min(0.9999, float(t) / (9 + t))
             self.moving_avg(ratio, 1 - ratio)
-            loss_vec, t = [], t + 1
-            if self.options.anneal:
-                decay_steps = min(1.0, float(t) / 50000)
-                lr = self.options.lr * 0.75 ** decay_steps
-                self.trainer.learning_rate = lr
+            return t + 1, loss
+        else:
+            arc_probs = np.transpose(np.reshape(softmax(flat_scores).npvalue(), (mini_batch[0].shape[0],  mini_batch[0].shape[0],  mini_batch[0].shape[1]), 'F'))
+            rel_probs = np.transpose(np.reshape(softmax(transpose(flat_rel_scores)).npvalue(),
+                                                (len(self.irels), mini_batch[0].shape[0], mini_batch[0].shape[0], mini_batch[0].shape[1]), 'F'))
+            outputs = []
 
-        renew_cg()
-        print 'current learning rate', self.trainer.learning_rate, 't:', t
-        return t
+            for msk, arc_prob, rel_prob in zip(np.transpose(mini_batch[5]), arc_probs, rel_probs):
+                # parse sentences one by one
+                msk[0] = 1.
+                sent_len = int(np.sum(msk))
+                arc_pred = decoder.arc_argmax(arc_prob, sent_len, msk)
+                rel_prob = rel_prob[np.arange(len(arc_pred)), arc_pred]
+                rel_pred = decoder.rel_argmax(rel_prob, sent_len, self.PAD,self.root_id)
+                outputs.append((arc_pred[1:sent_len], rel_pred[1:sent_len]))
+            renew_cg()
+            return outputs
+
+
+

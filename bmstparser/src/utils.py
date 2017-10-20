@@ -1,5 +1,6 @@
 from collections import Counter
-import re, codecs,sys
+import re, codecs,sys, random
+import numpy as np
 reload(sys)
 sys.setdefaultencoding('utf8')
 
@@ -32,7 +33,7 @@ def vocab(conll_path, min_count=2):
 
     with open(conll_path, 'r') as conllFP:
         for sentence in read_conll(conllFP):
-            wordsCount.update([node.form for node in sentence if isinstance(node, ConllEntry)])
+            wordsCount.update([node.norm for node in sentence if isinstance(node, ConllEntry)])
             posCount.update([node.pos for node in sentence if isinstance(node, ConllEntry)])
             relCount.update([node.relation for node in sentence if isinstance(node, ConllEntry)])
 
@@ -43,7 +44,7 @@ def vocab(conll_path, min_count=2):
     return ({w: i for i, w in enumerate(words)}, posCount.keys(), relCount.keys())
 
 def read_conll(fh):
-    root = ConllEntry(0, '*root*', '*root*', 'ROOT-POS', 'ROOT-FPOS', '_', -1, 'rroot', '_', '_')
+    root = ConllEntry(0, '*root*', '*root*', 'ROOT-POS', 'ROOT-FPOS', '_', 0, 'root', '_', '_')
     tokens = [root]
     for line in fh:
         tok = line.strip().split('\t')
@@ -83,6 +84,64 @@ def eval(gold, predicted):
 numberRegex = re.compile("[0-9]+|[0-9]+\\.[0-9]+|[0-9]+[0-9,]+");
 def normalize(word):
     return 'NUM' if numberRegex.match(word) else word.lower()
+
+def get_batches(buckets, model, is_train):
+    d_copy = [buckets[i][:] for i in range(len(buckets))]
+    if is_train:
+        for dc in d_copy:
+            random.shuffle(dc)
+    mini_batches = []
+    batch, cur_len = [], 0
+    for dc in d_copy:
+        for d in dc:
+            batch.append(d)
+            cur_len = max(cur_len, len(d))
+
+            if cur_len * len(batch) >= model.options.batch:
+                words = np.array([np.array(
+                    [model.vocab.get(batch[i][j].norm, 0) if j < len(batch[i]) else model.PAD for i in
+                     range(len(batch))]) for j in range(cur_len)])
+                pwords = np.array([np.array(
+                    [model.evocab.get(batch[i][j].norm, 0) if j < len(batch[i]) else model.PAD for i in
+                     range(len(batch))]) for j in range(cur_len)])
+                pos = np.array([np.array(
+                    [model.pos.get(batch[i][j].pos, 0) if j < len(batch[i]) else model.PAD for i in
+                     range(len(batch))]) for j in range(cur_len)])
+                heads = np.array(
+                    [np.array([batch[i][j].head if 0 < j < len(batch[i]) else 0 for i in range(len(batch))]) for j
+                     in range(cur_len)])
+                relations = np.array([np.array(
+                    [model.rels.get(batch[i][j].relation, 0) if j < len(batch[i]) else model.PAD_REL for i in
+                     range(len(batch))]) for j in range(cur_len)])
+                masks = np.array([np.array([1 if 0 < j < len(batch[i]) else 0 for i in range(len(batch))]) for j in
+                                  range(cur_len)])
+                mini_batches.append((words, pwords, pos, heads, relations, masks))
+                batch, cur_len = [], 0
+
+    if len(batch)>0 and not is_train:
+        words = np.array([np.array(
+            [model.vocab.get(batch[i][j].norm, 0) if j < len(batch[i]) else model.PAD for i in
+             range(len(batch))]) for j in range(cur_len)])
+        pwords = np.array([np.array(
+            [model.evocab.get(batch[i][j].norm, 0) if j < len(batch[i]) else model.PAD for i in
+             range(len(batch))]) for j in range(cur_len)])
+        pos = np.array([np.array(
+            [model.pos.get(batch[i][j].pos, 0) if j < len(batch[i]) else model.PAD for i in
+             range(len(batch))]) for j in range(cur_len)])
+        heads = np.array(
+            [np.array([batch[i][j].head if 0 < j < len(batch[i]) else 0 for i in range(len(batch))]) for j
+             in range(cur_len)])
+        relations = np.array([np.array(
+            [model.rels.get(batch[i][j].relation, 0) if j < len(batch[i]) else model.PAD_REL for i in
+             range(len(batch))]) for j in range(cur_len)])
+        masks = np.array([np.array([1 if 0 < j < len(batch[i]) else 0 for i in range(len(batch))]) for j in
+                          range(cur_len)])
+        mini_batches.append((words, pwords, pos, heads, relations, masks))
+        batch, cur_len = [], 0
+    if is_train:
+        random.shuffle(mini_batches)
+    return mini_batches
+
 
 def is_punc(pos):
 	return  pos=='.' or pos=='PUNC' or pos =='PUNCT' or \

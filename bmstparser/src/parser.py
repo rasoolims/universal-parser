@@ -103,7 +103,7 @@ if __name__ == '__main__':
         dev_batches = utils.get_batches(dev_buckets, parser, False)
 
         while t<=options.t:
-            print 'Starting epoch', epoch
+            print 'Starting epoch', epoch, 'time:', time.ctime()
             mini_batches = utils.get_batches(buckets, parser, True)
             start, closs = time.time(), 0
             for i, minibatch in enumerate(mini_batches):
@@ -113,10 +113,11 @@ if __name__ == '__main__':
                     lr = parser.options.lr * 0.75 ** decay_steps
                     parser.trainer.learning_rate = lr
                 closs += loss
-                sys.stdout.write('overall progress:' + str(round(100 * float(t) / options.t, 2)) + '% current progress:' + str(round(100 * float(i + 1) / len(mini_batches), 2)) + '% loss=' + str(closs / 10) + ' time: ' + str(time.time() - start) + '\n')
-                if t%100==0:
-                    las,uas = test(parser, dev_buckets, options.conll_dev, options.output+'/dev.out')
-                start, closs = time.time(), 0
+                if t%10==0:
+                    sys.stdout.write('overall progress:' + str(round(100 * float(t) / options.t, 2)) + '% current progress:' + str(round(100 * float(i + 1) / len(mini_batches), 2)) + '% loss=' + str(closs / 10) + ' time: ' + str(time.time() - start) + '\n')
+                    if t%100==0:
+                        las,uas = test(parser, dev_buckets, options.conll_dev, options.output+'/dev.out')
+                    start, closs = time.time(), 0
             print 'current learning rate', parser.trainer.learning_rate, 't:', t
             epoch+=1
             avg_model = mstlstm.MSTParserLSTM(pos, rels, w2i, options, parser)

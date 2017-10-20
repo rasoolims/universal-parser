@@ -12,12 +12,20 @@ def test(parser, buckets, test_file, output_file):
     arcs = reduce(lambda x, y: x + y, [list(result[0]) for result in results])
     rels = reduce(lambda x, y: x + y, [list(result[1]) for result in results])
     idx = 0
+    all_, uas, las = 0, 0, 0
     with open(test_file) as f:
         with open(output_file, 'w') as fo:
             for line in f.readlines():
                 info = line.strip().split()
                 if info:
                     assert len(info) == 10, 'Illegal line: %s' % line
+                    dep, label = str(arcs[idx]), parser.irels[rels[idx]]
+                    if not utils.is_punc(info[3]):
+                        all_ += 1
+                        if info[6]==dep:
+                            uas+= 1
+                            if info[7] == label:
+                                las+=1
                     info[6] = str(arcs[idx])
                     info[7] = parser.irels[rels[idx]]
                     fo.write('\t'.join(info) + '\n')
@@ -25,12 +33,8 @@ def test(parser, buckets, test_file, output_file):
                 else:
                     fo.write('\n')
 
-    os.system('perl utils/eval.pl -q -b -g %s -s %s -o tmp' % (test_file, output_file))
-    os.system('tail -n 3 tmp > score_tmp')
-    LAS, UAS = [float(line.strip().split()[-2]) for line in open('score_tmp').readlines()[:2]]
-    print 'LAS %.2f, UAS %.2f' % (LAS, UAS)
-    os.system('rm tmp score_tmp')
-    return LAS, UAS
+    uas, las = round(float(100*uas)/all_,2), round(float(100*las)/all_,2)
+    return las, uas
 
 if __name__ == '__main__':
     parser = OptionParser()
@@ -101,7 +105,7 @@ if __name__ == '__main__':
         for d in dev_data:
             dev_buckets[0].append(d)
         dev_batches = utils.get_batches(dev_buckets, parser, False)
-
+        best_las = 0
         while t<=options.t:
             print 'Starting epoch', epoch, 'time:', time.ctime()
             mini_batches = utils.get_batches(buckets, parser, True)
@@ -113,12 +117,24 @@ if __name__ == '__main__':
                     lr = parser.options.lr * 0.75 ** decay_steps
                     parser.trainer.learning_rate = lr
                 closs += loss
-                if t%10==0:
+                if t%1==0:
                     sys.stdout.write('overall progress:' + str(round(100 * float(t) / options.t, 2)) + '% current progress:' + str(round(100 * float(i + 1) / len(mini_batches), 2)) + '% loss=' + str(closs / 10) + ' time: ' + str(time.time() - start) + '\n')
-                    if t%100==0:
+                    if t%2==0:
                         las,uas = test(parser, dev_buckets, options.conll_dev, options.output+'/dev.out')
+                        print 'dev acc', las, uas
+                        if las>best_las:
+                            best_las = las
+                            print 'saving with', best_las, uas
+                            parser.Save(options.output+'/model')
+                        avg_model = mstlstm.MSTParserLSTM(pos, rels, w2i, options, parser)
+                        las,uas = test(avg_model, dev_buckets, options.conll_dev, options.output+'/dev.out')
+                        print 'dev avg acc', las, uas
+                        if las > best_las:
+                            best_las = las
+                            print 'saving avg with', best_las, uas
+                            avg_model.Save(options.output + '/model')
                     start, closs = time.time(), 0
             print 'current learning rate', parser.trainer.learning_rate, 't:', t
             epoch+=1
-            avg_model = mstlstm.MSTParserLSTM(pos, rels, w2i, options, parser)
+
 

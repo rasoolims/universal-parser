@@ -77,10 +77,14 @@ if __name__ == '__main__':
         parser = mstlstm.MSTParserLSTM(pos, rels, w2i, stored_opt)
         parser.Load(options.model)
         ts = time.time()
+        test_buckets = [list()]
+        test_data = list(utils.read_conll(open(options.conll_test, 'r')))
+        for d in test_data:
+            test_buckets[0].append(d)
+        test(parser, test_buckets, options.conll_test, options.conll_output)
         test_res = list(parser.Predict(options.conll_test, False, True))
         te = time.time()
         print 'Finished predicting test.', te-ts, 'seconds.'
-        utils.write_conll(options.conll_output, test_res)
     else:
         print 'Preparing vocab'
         w2i, pos, rels = utils.vocab(options.conll_train)
@@ -104,7 +108,6 @@ if __name__ == '__main__':
         dev_data = list(utils.read_conll(open(options.conll_dev, 'r')))
         for d in dev_data:
             dev_buckets[0].append(d)
-        dev_batches = utils.get_batches(dev_buckets, parser, False)
         best_las = 0
         while t<=options.t:
             print 'Starting epoch', epoch, 'time:', time.ctime()
@@ -117,7 +120,7 @@ if __name__ == '__main__':
                     lr = parser.options.lr * 0.75 ** decay_steps
                     parser.trainer.learning_rate = lr
                 closs += loss
-                if t%10==0:
+                if t%1==0:
                     sys.stdout.write('overall progress:' + str(round(100 * float(t) / options.t, 2)) + '% current progress:' + str(round(100 * float(i + 1) / len(mini_batches), 2)) + '% loss=' + str(closs / 10) + ' time: ' + str(time.time() - start) + '\n')
                     if t%100==0:
                         las,uas = test(parser, dev_buckets, options.conll_dev, options.output+'/dev.out')

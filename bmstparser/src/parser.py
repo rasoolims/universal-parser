@@ -117,9 +117,9 @@ if __name__ == '__main__':
                     lr = parser.options.lr * 0.75 ** decay_steps
                     parser.trainer.learning_rate = lr
                 closs += loss
-                if t%1==0:
+                if t%10==0:
                     sys.stdout.write('overall progress:' + str(round(100 * float(t) / options.t, 2)) + '% current progress:' + str(round(100 * float(i + 1) / len(mini_batches), 2)) + '% loss=' + str(closs / 10) + ' time: ' + str(time.time() - start) + '\n')
-                    if t%2==0:
+                    if t%100==0:
                         las,uas = test(parser, dev_buckets, options.conll_dev, options.output+'/dev.out')
                         print 'dev acc', las, uas
                         if las>best_las:

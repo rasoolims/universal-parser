@@ -223,12 +223,12 @@ class MSTParserLSTM:
         rel_scores = self.bilinear(ML, self.u_label.expr(), HL, self.options.label_mlp, mini_batch[0].shape[0], mini_batch[0].shape[1], len(self.irels), True, True)
         flat_scores = reshape(arc_scores, (mini_batch[0].shape[0],), mini_batch[0].shape[0]* mini_batch[0].shape[1])
         flat_rel_scores = reshape(rel_scores, (mini_batch[0].shape[0], len(self.irels)), mini_batch[0].shape[0]* mini_batch[0].shape[1])
-        heads = np.reshape(mini_batch[3], (-1,), 'F') if train else np.reshape(arc_scores.npvalue().argmax(0), (-1,), 'F')
-        partial_rel_scores = pick_batch(flat_rel_scores, heads)
         masks = np.reshape(mini_batch[5], (-1,), 'F')
         mask_1D_tensor = inputTensor(masks, batched=True)
         n_tokens = np.sum(masks)
         if train:
+            heads = np.reshape(mini_batch[3], (-1,), 'F')
+            partial_rel_scores = pick_batch(flat_rel_scores, heads)
             gold_relations = np.reshape(mini_batch[4], (-1,), 'F')
             arc_losses = pickneglogsoftmax_batch(flat_scores, heads)
             arc_loss = sum_batches(arc_losses*mask_1D_tensor)/n_tokens
@@ -255,7 +255,7 @@ class MSTParserLSTM:
                 sent_len = int(np.sum(msk))
                 arc_pred = decoder.arc_argmax(arc_prob, sent_len, msk)
                 rel_prob = rel_prob[np.arange(len(arc_pred)), arc_pred]
-                rel_pred = decoder.rel_argmax(rel_prob, sent_len, self.PAD,self.root_id)
+                rel_pred = decoder.rel_argmax(rel_prob, sent_len, self.PAD_REL, self.root_id)
                 outputs.append((arc_pred[1:sent_len], rel_pred[1:sent_len]))
             renew_cg()
             return outputs

@@ -83,7 +83,6 @@ if __name__ == '__main__':
         for d in test_data:
             test_buckets[0].append(d)
         test(parser, test_buckets, options.conll_test, options.conll_output)
-        test_res = list(parser.Predict(options.conll_test, False, True))
         te = time.time()
         print 'Finished predicting test.', te-ts, 'seconds.'
     else:

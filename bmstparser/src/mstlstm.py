@@ -93,6 +93,24 @@ class MSTParserLSTM:
             if from_model.evocab:
                 self.evocab = from_model.evocab
                 self.elookup =  self.model.add_lookup_parameters((len(self.evocab) + 2, edim), init=NumpyInitializer(from_model.elookup.expr().npvalue()))
+            self.elookup = None
+            if options.external_embedding is not None:
+                external_embedding_fp = open(options.external_embedding, 'r')
+                external_embedding = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in
+                                      external_embedding_fp if len(line.split(' ')) > 2}
+                external_embedding_fp.close()
+                self.evocab = {word: i + 2 for i, word in enumerate(external_embedding)}
+
+                edim = len(external_embedding.values()[0])
+                self.elookup = self.model.add_lookup_parameters((len(external_embedding) + 2, edim))
+                self.elookup.set_updated(False)
+                self.elookup.init_row(0, [0] * edim)
+                for word in external_embedding.keys():
+                    self.elookup.init_row(self.evocab[word], external_embedding[word])
+
+                print 'Initialized with pre-trained embedding. Vector dimensions', edim, 'and', len(external_embedding), \
+                    'words, number of training words', len(w2i) + 2
+
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe), init=NumpyInitializer(from_model.a_plookup))
             self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init=NumpyInitializer(from_model.a_arc_mlp_head))
             self.arc_mlp_head_b = self.model.add_parameters((options.arc_mlp,),init=NumpyInitializer(from_model.a_arc_mlp_head_b))

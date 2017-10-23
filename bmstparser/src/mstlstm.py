@@ -33,7 +33,6 @@ class MSTParserLSTM:
                 self.evocab = {word: i + 2 for i, word in enumerate(external_embedding)}
 
                 edim = len(external_embedding.values()[0])
-                self.wlookup = self.model.add_lookup_parameters((len(w2i) + 2, edim), init=ConstInitializer(0))
                 self.elookup = self.model.add_lookup_parameters((len(external_embedding) + 2, edim))
                 self.elookup.set_updated(False)
                 self.elookup.init_row(0, [0] * edim)
@@ -44,12 +43,7 @@ class MSTParserLSTM:
                     'words, number of training words', len(w2i) + 2
 
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe))
-            self.deep_lstms = BiRNNBuilder(options.layer, edim + options.pe, options.rnn * 2, self.model, VanillaLSTMBuilder)
-            for i in range(len(self.deep_lstms.builder_layers)):
-                builder = self.deep_lstms.builder_layers[i]
-                b0 = orthonormal_VanillaLSTMBuilder(builder[0], builder[0].spec[1], builder[0].spec[2])
-                b1 = orthonormal_VanillaLSTMBuilder(builder[1], builder[1].spec[1], builder[1].spec[2])
-                self.deep_lstms.builder_layers[i] = (b0, b1)
+
             w_mlp_arc = orthonormal_initializer(options.arc_mlp, options.rnn * 2)
             w_mlp_label = orthonormal_initializer(options.label_mlp, options.rnn * 2)
             self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init= NumpyInitializer(w_mlp_arc))
@@ -62,6 +56,12 @@ class MSTParserLSTM:
             self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init = ConstInitializer(0))
             self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp+1), init = ConstInitializer(0))
             self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp+1), options.label_mlp+1), init = ConstInitializer(0))
+            self.deep_lstms = BiRNNBuilder(options.layer, edim + options.pe, options.rnn * 2, self.model, VanillaLSTMBuilder)
+            for i in range(len(self.deep_lstms.builder_layers)):
+                builder = self.deep_lstms.builder_layers[i]
+                b0 = orthonormal_VanillaLSTMBuilder(builder[0], builder[0].spec[1], builder[0].spec[2])
+                b1 = orthonormal_VanillaLSTMBuilder(builder[1], builder[1].spec[1], builder[1].spec[2])
+                self.deep_lstms.builder_layers[i] = (b0, b1)
 
             self.a_wlookup = np.ndarray(shape=(options.we, len(w2i)+2), dtype=float)
             self.a_plookup = np.ndarray(shape=(options.pe, len(pos)+2), dtype=float)
@@ -93,24 +93,6 @@ class MSTParserLSTM:
             if from_model.evocab:
                 self.evocab = from_model.evocab
                 self.elookup =  self.model.add_lookup_parameters((len(self.evocab) + 2, edim), init=NumpyInitializer(from_model.elookup.expr().npvalue()))
-            self.elookup = None
-            if options.external_embedding is not None:
-                external_embedding_fp = open(options.external_embedding, 'r')
-                external_embedding = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in
-                                      external_embedding_fp if len(line.split(' ')) > 2}
-                external_embedding_fp.close()
-                self.evocab = {word: i + 2 for i, word in enumerate(external_embedding)}
-
-                edim = len(external_embedding.values()[0])
-                self.elookup = self.model.add_lookup_parameters((len(external_embedding) + 2, edim))
-                self.elookup.set_updated(False)
-                self.elookup.init_row(0, [0] * edim)
-                for word in external_embedding.keys():
-                    self.elookup.init_row(self.evocab[word], external_embedding[word])
-
-                print 'Initialized with pre-trained embedding. Vector dimensions', edim, 'and', len(external_embedding), \
-                    'words, number of training words', len(w2i) + 2
-
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe), init=NumpyInitializer(from_model.a_plookup))
             self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init=NumpyInitializer(from_model.a_arc_mlp_head))
             self.arc_mlp_head_b = self.model.add_parameters((options.arc_mlp,),init=NumpyInitializer(from_model.a_arc_mlp_head_b))

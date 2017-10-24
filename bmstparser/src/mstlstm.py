@@ -7,7 +7,7 @@ import codecs
 from linalg import *
 
 class MSTParserLSTM:
-    def __init__(self, pos, rels, w2i, options, from_model=None):
+    def __init__(self, pos, rels, w2i, chars, options, from_model=None):
         self.model = Model()
         self.PAD = 1
         self.options = options
@@ -18,6 +18,7 @@ class MSTParserLSTM:
         self.vocab = {word: ind + 2 for word, ind in w2i.iteritems()}
         self.pos = {word: ind + 2 for ind, word in enumerate(pos)}
         self.rels = {word: ind + 1 for ind, word in enumerate(rels)}
+        self.chars = {c: i + 2 for i, c in enumerate(chars)}
         self.root_id = self.rels['root']
         self.irels = ['PAD'] + rels
         self.PAD_REL = 0
@@ -63,6 +64,10 @@ class MSTParserLSTM:
                 b1 = orthonormal_VanillaLSTMBuilder(builder[1], builder[1].spec[1], builder[1].spec[2])
                 self.deep_lstms.builder_layers[i] = (b0, b1)
 
+            if options.use_char:
+                self.clookup = self.model.add_lookup_parameters((len(chars) + 2, options.ce))
+                self.char_lstm = BiRNNBuilder(1, options.ce, edim, self.model, VanillaLSTMBuilder)
+
             self.a_wlookup = np.ndarray(shape=(options.we, len(w2i)+2), dtype=float)
             self.a_plookup = np.ndarray(shape=(options.pe, len(pos)+2), dtype=float)
             self.a_arc_mlp_head = np.ndarray(shape=(options.arc_mlp, options.rnn * 2), dtype=float)
@@ -88,6 +93,21 @@ class MSTParserLSTM:
                     else:
                         this_layer.append(np.ndarray(shape=(dim[0][0],dim[0][1]), dtype=float))
                 self.a_lstms.append(this_layer)
+
+            if options.use_char:
+                self.a_clookup = np.ndarray(shape=(options.ce, len(chars) + 2), dtype=float)
+                self.ac_lstms = []
+                for i in range(len(self.char_lstm.builder_layers)):
+                    builder = self.char_lstm.builder_layers[i]
+                    params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
+                    this_layer = []
+                    for j in range(len(params)):
+                        dim = params[j].expr().dim()
+                        if (j + 1) % 3 == 0:  # bias
+                            this_layer.append(np.ndarray(shape=(dim[0][0],), dtype=float))
+                        else:
+                            this_layer.append(np.ndarray(shape=(dim[0][0], dim[0][1]), dtype=float))
+                    self.ac_lstms.append(this_layer)
         else:
             self.wlookup = self.model.add_lookup_parameters((len(w2i) + 2, edim), init=NumpyInitializer(from_model.a_wlookup))
             if from_model.evocab:
@@ -111,12 +131,21 @@ class MSTParserLSTM:
                 for j in range(len(params)):
                     params[j].set_value(from_model.a_lstms[i][j])
 
+            if options.use_char:
+                self.clookup = self.model.add_lookup_parameters((len(chars) + 2, options.ce),  init=NumpyInitializer(from_model.a_clookup))
+                self.char_lstm = BiRNNBuilder(1, options.ce, edim, self.model, VanillaLSTMBuilder)
+                for i in range(len(self.char_lstm.builder_layers)):
+                    builder = self.char_lstm.builder_layers[i]
+                    params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
+                    for j in range(len(params)):
+                        params[j].set_value(from_model.ac_lstms[i][j])
+
         def _emb_mask_generator(seq_len, batch_size):
             ret = []
             for _ in xrange(seq_len):
                 word_mask = np.random.binomial(1, 1. - self.options.dropout, batch_size).astype(np.float32)
                 tag_mask = np.random.binomial(1, 1. - self.options.dropout, batch_size).astype(np.float32)
-                scale = 3. / (2. * word_mask + tag_mask + 1e-12)
+                scale = 3. / (2. * word_mask + tag_mask + 1e-12) if not self.options.use_char else 4. / (3. * word_mask + tag_mask + 1e-12)
                 word_mask *= scale
                 tag_mask *= scale
                 word_mask = inputTensor(word_mask, batched=True)
@@ -145,6 +174,14 @@ class MSTParserLSTM:
             params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
             for j in range(len(params)):
                 self.a_lstms[i][j] = r1 * self.a_lstms[i][j] + r2 * params[j].expr().npvalue()
+
+        if self.options.use_char:
+            self.a_clookup = r1 * self.a_clookup + r2 * self.clookup.expr().npvalue()
+            for i in range(len(self.char_lstm.builder_layers)):
+                builder = self.char_lstm.builder_layers[i]
+                params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
+                for j in range(len(params)):
+                    self.ac_lstms[i][j] = r1 * self.ac_lstms[i][j] + r2 * params[j].expr().npvalue()
 
         renew_cg()
 
@@ -191,12 +228,21 @@ class MSTParserLSTM:
             inputs = [concatenate([f, b]) for f, b in zip(fs, reversed(bs))]
         return inputs
 
+
     def rnn_mlp(self, sens, train):
         '''
         Here, I assumed all sens have the same length.
         '''
-        words, pwords, pos = sens[0], sens[1], sens[2]
-        wembed = [lookup_batch(self.wlookup, words[i]) + lookup_batch(self.elookup, pwords[i]) for i in range(len(words))]
+        words, pwords, pos, chars = sens[0], sens[1], sens[2], sens[5]
+        if self.options.use_char:
+            cembed = [lookup_batch(self.clookup, c) for c in chars]
+            crnn = reshape(self.char_lstm.transduce(cembed)[-1], (self.options.we, words.shape[0]*words.shape[1]))
+            cnn_reps = [list() for i in range(len(words))]
+            for i in range(len(words)):
+                cnn_reps[i] = pick_batch(crnn, [j*words.shape[0]+i for j in range(words.shape[1])],1)
+            wembed = [lookup_batch(self.wlookup, words[i]) + lookup_batch(self.elookup, pwords[i]) + cnn_reps[i] for i in range(len(words))]
+        else:
+            wembed = [lookup_batch(self.wlookup, words[i]) + lookup_batch(self.elookup, pwords[i]) for i in range(len(words))]
         posembed = [lookup_batch(self.plookup, pos[i]) for i in range(len(pos))]
 
         if not train:
@@ -223,7 +269,7 @@ class MSTParserLSTM:
         rel_scores = self.bilinear(ML, self.u_label.expr(), HL, self.options.label_mlp, mini_batch[0].shape[0], mini_batch[0].shape[1], len(self.irels), True, True)
         flat_scores = reshape(arc_scores, (mini_batch[0].shape[0],), mini_batch[0].shape[0]* mini_batch[0].shape[1])
         flat_rel_scores = reshape(rel_scores, (mini_batch[0].shape[0], len(self.irels)), mini_batch[0].shape[0]* mini_batch[0].shape[1])
-        masks = np.reshape(mini_batch[5], (-1,), 'F')
+        masks = np.reshape(mini_batch[-1], (-1,), 'F')
         mask_1D_tensor = inputTensor(masks, batched=True)
         n_tokens = np.sum(masks)
         if train:
@@ -249,7 +295,7 @@ class MSTParserLSTM:
                                                 (len(self.irels), mini_batch[0].shape[0], mini_batch[0].shape[0], mini_batch[0].shape[1]), 'F'))
             outputs = []
 
-            for msk, arc_prob, rel_prob in zip(np.transpose(mini_batch[5]), arc_probs, rel_probs):
+            for msk, arc_prob, rel_prob in zip(np.transpose(mini_batch[-1]), arc_probs, rel_probs):
                 # parse sentences one by one
                 msk[0] = 1.
                 sent_len = int(np.sum(msk))

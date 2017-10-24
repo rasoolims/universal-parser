@@ -48,6 +48,7 @@ if __name__ == '__main__':
     parser.add_option("--we", type="int", dest="we", default=100)
     parser.add_option("--batch", type="int", dest="batch", default=5000)
     parser.add_option("--pe", type="int", dest="pe", default=100)
+    parser.add_option("--ce", type="int", dest="ce", default=100)
     parser.add_option("--re", type="int", dest="re", default=25)
     parser.add_option("--t", type="int", dest="t", default=50000)
     parser.add_option("--arc_mlp", type="int", dest="arc_mlp", default=500)
@@ -63,6 +64,7 @@ if __name__ == '__main__':
     parser.add_option("--rnn", type="int", dest="rnn", help='dimension of rnn in each direction', default=400)
     parser.add_option("--predict", action="store_true", dest="predictFlag", default=False)
     parser.add_option("--no_anneal", action="store_false", dest="anneal", default=True)
+    parser.add_option("--no_char", action="store_false", dest="use_char", default=True)
     parser.add_option("--dynet-mem", type="int", dest="mem", default=0)
     parser.add_option("--dynet-autobatch", type="int", dest="dynet-autobatch", default=0)
 
@@ -71,11 +73,11 @@ if __name__ == '__main__':
     print 'Using external embedding:', options.external_embedding
     if options.predictFlag:
         with open(options.params, 'r') as paramsfp:
-            w2i, pos, rels, stored_opt = pickle.load(paramsfp)
+            w2i, pos, rels, chars, stored_opt = pickle.load(paramsfp)
         stored_opt.external_embedding = options.external_embedding
         print stored_opt
         print 'Initializing lstm mstparser:'
-        parser = mstlstm.MSTParserLSTM(pos, rels, w2i, stored_opt)
+        parser = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, stored_opt)
         parser.Load(options.model)
         ts = time.time()
         test_buckets = [list()]
@@ -87,14 +89,14 @@ if __name__ == '__main__':
         print 'Finished predicting test.', te-ts, 'seconds.'
     else:
         print 'Preparing vocab'
-        w2i, pos, rels = utils.vocab(options.conll_train)
+        w2i, pos, rels, chars = utils.vocab(options.conll_train)
 
         with open(os.path.join(options.output, options.params), 'w') as paramsfp:
-            pickle.dump((w2i, pos, rels, options), paramsfp)
+            pickle.dump((w2i, pos, rels, chars, options), paramsfp)
         print 'Finished collecting vocab'
 
         print 'Initializing lstm mstparser:'
-        parser = mstlstm.MSTParserLSTM(pos, rels, w2i, options)
+        parser = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, options)
         best_acc = -float('inf')
         t, epoch = 0,1
         train_data = list(utils.read_conll(open(options.conll_train, 'r')))
@@ -129,7 +131,7 @@ if __name__ == '__main__':
                             best_las = las
                             print 'saving with', best_las, uas
                             parser.Save(options.output+'/model')
-                        avg_model = mstlstm.MSTParserLSTM(pos, rels, w2i, options, parser)
+                        avg_model = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, options, parser)
                         las,uas = test(avg_model, dev_buckets, options.conll_dev, options.output+'/dev.out')
                         print 'dev avg acc', las, uas
                         if las > best_las:

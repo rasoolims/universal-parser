@@ -30,18 +30,21 @@ def vocab(conll_path, min_count=2):
     wordsCount = Counter()
     posCount = Counter()
     relCount = Counter()
-
+    chars = set()
     with open(conll_path, 'r') as conllFP:
         for sentence in read_conll(conllFP):
             wordsCount.update([node.norm for node in sentence if isinstance(node, ConllEntry)])
             posCount.update([node.pos for node in sentence if isinstance(node, ConllEntry)])
             relCount.update([node.relation for node in sentence if isinstance(node, ConllEntry)])
+            for node in sentence:
+                for c in list(node.form):
+                    chars.add(c.lower())
 
     words = set()
     for w in wordsCount.keys():
         if wordsCount[w]>=min_count:
             words.add(w)
-    return ({w: i for i, w in enumerate(words)}, posCount.keys(), relCount.keys())
+    return ({w: i for i, w in enumerate(words)}, list(posCount.keys()), list(relCount.keys()), list(chars))
 
 def read_conll(fh):
     root = ConllEntry(0, '*root*', '*root*', 'ROOT-POS', 'ROOT-FPOS', '_', 0, 'root', '_', '_')
@@ -91,10 +94,11 @@ def get_batches(buckets, model, is_train):
         for dc in d_copy:
             random.shuffle(dc)
     mini_batches = []
-    batch, cur_len = [], 0
+    batch, cur_len, cur_c_len = [], 0, 0
     for dc in d_copy:
         for d in dc:
             batch.append(d)
+            cur_c_len = max(cur_c_len, max([len(w.form) for w in d]))
             cur_len = max(cur_len, len(d))
 
             if cur_len * len(batch) >= model.options.batch:
@@ -113,10 +117,12 @@ def get_batches(buckets, model, is_train):
                 relations = np.array([np.array(
                     [model.rels.get(batch[i][j].relation, 0) if j < len(batch[i]) else model.PAD_REL for i in
                      range(len(batch))]) for j in range(cur_len)])
+                chars = np.array([[[model.chars.get(batch[i][j].form[c].lower(), 0) if 0 < j < len(batch[i]) and c < len(batch[i][j].form) else (1 if j==0 and c==0 else 0) for i in range(len(batch))] for j in range(cur_len)]for c in range(cur_c_len)])
+                chars = np.transpose(np.reshape(chars, (len(batch)*cur_len, cur_c_len)))
                 masks = np.array([np.array([1 if 0 < j < len(batch[i]) else 0 for i in range(len(batch))]) for j in
                                   range(cur_len)])
-                mini_batches.append((words, pwords, pos, heads, relations, masks))
-                batch, cur_len = [], 0
+                mini_batches.append((words, pwords, pos, heads, relations, chars, masks))
+                batch, cur_len, cur_c_len = [], 0, 0
 
     if len(batch)>0 and not is_train:
         words = np.array([np.array(
@@ -134,9 +140,13 @@ def get_batches(buckets, model, is_train):
         relations = np.array([np.array(
             [model.rels.get(batch[i][j].relation, 0) if j < len(batch[i]) else model.PAD_REL for i in
              range(len(batch))]) for j in range(cur_len)])
+        chars = np.array([[[model.chars.get(batch[i][j].form[c].lower(), 0) if 0 < j < len(batch[i]) and c < len(
+            batch[i][j].form) else (1 if j == 0 and c == 0 else 0) for i in range(len(batch))] for j in range(cur_len)]
+                          for c in range(cur_c_len)])
+        chars = np.transpose(np.reshape(chars, (len(batch) * cur_len, cur_c_len)))
         masks = np.array([np.array([1 if 0 < j < len(batch[i]) else 0 for i in range(len(batch))]) for j in
                           range(cur_len)])
-        mini_batches.append((words, pwords, pos, heads, relations, masks))
+        mini_batches.append((words, pwords, pos, heads, relations, chars, masks))
         batch, cur_len = [], 0
     if is_train:
         random.shuffle(mini_batches)

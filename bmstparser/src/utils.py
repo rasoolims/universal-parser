@@ -7,7 +7,7 @@ sys.setdefaultencoding('utf8')
 class ConllEntry:
     def __init__(self, id, form, lemma, pos, fpos, feats=None, head=None, relation=None, deps=None, misc=None):
         self.id = id
-        self.form = form
+        self.form = form.lower() # assuming everything is lowercased.
         self.norm = normalize(form)
         self.fpos = fpos.upper()
         self.pos = pos.upper()

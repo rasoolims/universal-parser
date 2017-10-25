@@ -1,7 +1,7 @@
 from dynet import *
 from utils import read_conll, write_conll
 from operator import itemgetter
-import utils, time, random, decoder
+import utils, time, random, decoder, gzip
 import numpy as np
 import codecs
 from linalg import *
@@ -27,7 +27,7 @@ class MSTParserLSTM:
             self.wlookup = self.model.add_lookup_parameters((len(w2i) + 2, edim))
             self.elookup = None
             if options.external_embedding is not None:
-                external_embedding_fp = open(options.external_embedding, 'r')
+                external_embedding_fp = gzip.open(options.external_embedding, 'r')
                 external_embedding = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in
                                       external_embedding_fp if len(line.split(' ')) > 2}
                 external_embedding_fp.close()

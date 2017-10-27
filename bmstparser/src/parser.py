@@ -16,7 +16,7 @@ def test(parser, buckets, test_file, output_file):
     with open(test_file) as f:
         with open(output_file, 'w') as fo:
             for line in f.readlines():
-                info = line.strip().split()
+                info = line.strip().split('\t')
                 if info:
                     assert len(info) == 10, 'Illegal line: %s' % line
                     dep, label = str(arcs[idx]), parser.irels[rels[idx]]

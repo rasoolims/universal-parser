@@ -127,7 +127,7 @@ if __name__ == '__main__':
                         else:
                             no_improvement += 1
                     start, closs = time.time(), 0
-            if no_improvement>1000:
+            if no_improvement>50:
                 print 'No improvements after',no_improvement, 'steps -> terminating.'
                 sys.exit(0)
             print 'current learning rate', parser.trainer.learning_rate, 't:', t

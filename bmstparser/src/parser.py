@@ -17,7 +17,7 @@ def test(parser, buckets, test_file, output_file):
         with open(output_file, 'w') as fo:
             for line in f.readlines():
                 info = line.strip().split('\t')
-                if info:
+                if info and line.strip() != '':
                     assert len(info) == 10, 'Illegal line: %s' % line
                     dep, label = str(arcs[idx]), parser.irels[rels[idx]]
                     if not utils.is_punc(info[3]):
@@ -123,9 +123,9 @@ if __name__ == '__main__':
                     lr = parser.options.lr * 0.75 ** decay_steps
                     parser.trainer.learning_rate = lr
                 closs += loss
-                if t%10==0:
+                if t%1==0:
                     sys.stdout.write('overall progress:' + str(round(100 * float(t) / options.t, 2)) + '% current progress:' + str(round(100 * float(i + 1) / len(mini_batches), 2)) + '% loss=' + str(closs / 10) + ' time: ' + str(time.time() - start) + '\n')
-                    if t%100==0:
+                    if t%1==0:
                         avg_model = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, options, parser)
                         las,uas = test(avg_model, dev_buckets, options.conll_dev, options.output+'/dev.out')
                         print 'dev avg acc', las, uas

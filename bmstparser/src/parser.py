@@ -111,6 +111,7 @@ if __name__ == '__main__':
         for d in dev_data:
             dev_buckets[0].append(d)
         best_las = 0
+        no_improvement = 0
         while t<=options.t:
             print 'Starting epoch', epoch, 'time:', time.ctime()
             mini_batches = utils.get_batches(buckets, parser, True)
@@ -132,7 +133,13 @@ if __name__ == '__main__':
                             best_las = las
                             print 'saving avg with', best_las, uas
                             avg_model.Save(options.output + '/model')
+                            no_improvement = 0
+                        else:
+                            no_improvement += 1
                     start, closs = time.time(), 0
+            if no_improvement>1000:
+                print 'No improvements after',no_improvement, 'steps -> terminating.'
+                sys.exit(0)
             print 'current learning rate', parser.trainer.learning_rate, 't:', t
             epoch+=1
 

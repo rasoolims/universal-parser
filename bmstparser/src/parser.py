@@ -90,7 +90,7 @@ if __name__ == '__main__':
     else:
         print 'Preparing vocab'
         w2i, pos, rels, chars = utils.vocab(options.conll_train)
-
+        if not os.path.isdir(options.output): os.mkdir(options.output)
         with open(os.path.join(options.output, options.params), 'w') as paramsfp:
             pickle.dump((w2i, pos, rels, chars, options), paramsfp)
         print 'Finished collecting vocab'

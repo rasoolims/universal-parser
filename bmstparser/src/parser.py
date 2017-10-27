@@ -12,29 +12,19 @@ def test(parser, buckets, test_file, output_file):
     arcs = reduce(lambda x, y: x + y, [list(result[0]) for result in results])
     rels = reduce(lambda x, y: x + y, [list(result[1]) for result in results])
     idx = 0
-    all_, uas, las = 0, 0, 0
     with open(test_file) as f:
         with open(output_file, 'w') as fo:
             for line in f.readlines():
                 info = line.strip().split('\t')
                 if info and line.strip() != '':
                     assert len(info) == 10, 'Illegal line: %s' % line
-                    dep, label = str(arcs[idx]), parser.irels[rels[idx]]
-                    if not utils.is_punc(info[3]):
-                        all_ += 1
-                        if info[6]==dep:
-                            uas+= 1
-                            if info[7] == label:
-                                las+=1
                     info[6] = str(arcs[idx])
                     info[7] = parser.irels[rels[idx]]
                     fo.write('\t'.join(info) + '\n')
                     idx += 1
                 else:
                     fo.write('\n')
-
-    uas, las = round(float(100*uas)/all_,2), round(float(100*las)/all_,2)
-    return las, uas
+    return utils.eval(test_file, output_file)
 
 if __name__ == '__main__':
     parser = OptionParser()

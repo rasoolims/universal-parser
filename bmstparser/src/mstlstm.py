@@ -57,7 +57,8 @@ class MSTParserLSTM:
             self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init = ConstInitializer(0))
             self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp+1), init = ConstInitializer(0))
             self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp+1), options.label_mlp+1), init = ConstInitializer(0))
-            self.deep_lstms = BiRNNBuilder(options.layer, edim + options.pe, options.rnn * 2, self.model, VanillaLSTMBuilder)
+            input_dim = edim + options.pe if self.options.use_pos else edim
+            self.deep_lstms = BiRNNBuilder(options.layer, input_dim, options.rnn * 2, self.model, VanillaLSTMBuilder)
             for i in range(len(self.deep_lstms.builder_layers)):
                 builder = self.deep_lstms.builder_layers[i]
                 b0 = orthonormal_VanillaLSTMBuilder(builder[0], builder[0].spec[1], builder[0].spec[2])
@@ -124,7 +125,8 @@ class MSTParserLSTM:
             self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init = NumpyInitializer(from_model.a_label_mlp_dep_b))
             self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp + 1), init = NumpyInitializer(from_model.a_w_arc))
             self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp + 1), options.label_mlp + 1),init = NumpyInitializer(from_model.a_u_label))
-            self.deep_lstms = BiRNNBuilder(options.layer, edim + options.pe, options.rnn * 2, self.model, VanillaLSTMBuilder)
+            input_dim = edim + options.pe if self.options.use_pos else edim
+            self.deep_lstms = BiRNNBuilder(options.layer, input_dim, options.rnn * 2, self.model, VanillaLSTMBuilder)
             for i in range(len(self.deep_lstms.builder_layers)):
                 builder = self.deep_lstms.builder_layers[i]
                 params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
@@ -144,13 +146,19 @@ class MSTParserLSTM:
             ret = []
             for _ in xrange(seq_len):
                 word_mask = np.random.binomial(1, 1. - self.options.dropout, batch_size).astype(np.float32)
-                tag_mask = np.random.binomial(1, 1. - self.options.dropout, batch_size).astype(np.float32)
-                scale = 3. / (2. * word_mask + tag_mask + 1e-12) if not self.options.use_char else 4. / (3. * word_mask + tag_mask + 1e-12)
-                word_mask *= scale
-                tag_mask *= scale
-                word_mask = inputTensor(word_mask, batched=True)
-                tag_mask = inputTensor(tag_mask, batched=True)
-                ret.append((word_mask, tag_mask))
+                if self.options.use_pos:
+                    tag_mask = np.random.binomial(1, 1. - self.options.dropout, batch_size).astype(np.float32)
+                    scale = 3. / (2. * word_mask + tag_mask + 1e-12) if not self.options.use_char else 5. / (4. * word_mask + tag_mask + 1e-12)
+                    word_mask *= scale
+                    tag_mask *= scale
+                    word_mask = inputTensor(word_mask, batched=True)
+                    tag_mask = inputTensor(tag_mask, batched=True)
+                    ret.append((word_mask, tag_mask))
+                else:
+                    scale = 2. / (2. * word_mask + 1e-12) if not self.options.use_char else 4. / (4. * word_mask + 1e-12)
+                    word_mask *= scale
+                    word_mask = inputTensor(word_mask, batched=True)
+                    ret.append(word_mask)
             return ret
 
         self.generate_emb_mask = _emb_mask_generator
@@ -245,13 +253,14 @@ class MSTParserLSTM:
             wembed = [lookup_batch(self.wlookup, words[i]) + lookup_batch(self.elookup, pwords[i]) + cnn_reps[i] for i in range(len(words))]
         else:
             wembed = [lookup_batch(self.wlookup, words[i]) + lookup_batch(self.elookup, pwords[i]) for i in range(len(words))]
-        posembed = [lookup_batch(self.plookup, pos[i]) for i in range(len(pos))]
+        posembed = [lookup_batch(self.plookup, pos[i]) for i in range(len(pos))] if self.options.use_pos else None
 
         if not train:
-            inputs = [concatenate([w, pos]) for w, pos in zip(wembed, posembed)]
+            inputs = [concatenate([w, pos]) for w, pos in zip(wembed, posembed)] if self.options.use_pos else wembed
         else:
             emb_masks = self.generate_emb_mask(words.shape[0], words.shape[1])
-            inputs = [concatenate([cmult(w, wm), cmult(pos, posm)]) for w, pos, (wm, posm) in zip(wembed, posembed, emb_masks)]
+            inputs = [concatenate([cmult(w, wm), cmult(pos, posm)]) for w, pos, (wm, posm) in zip(wembed, posembed, emb_masks)] if self.options.use_pos\
+                else [cmult(w, wm) for w, wm in zip(wembed, emb_masks)]
 
         d = self.options.dropout
         h_out = self.bi_rnn(inputs, words.shape[1], d if train else 0, d if train else 0) #self.deep_lstms.transduce(inputs)

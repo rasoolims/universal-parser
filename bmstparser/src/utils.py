@@ -97,7 +97,7 @@ def get_batches(buckets, model, is_train):
     batch, cur_len, cur_c_len = [], 0, 0
     for dc in d_copy:
         for d in dc:
-            if is_train and len(d)<=100:
+            if (is_train and len(d)<=100) or not is_train:
                 batch.append(d)
                 cur_c_len = max(cur_c_len, max([len(w.form) for w in d]))
                 cur_len = max(cur_len, len(d))

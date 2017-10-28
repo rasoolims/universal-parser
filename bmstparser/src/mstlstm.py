@@ -39,6 +39,8 @@ class MSTParserLSTM:
                 self.elookup.init_row(0, [0] * edim)
                 for word in external_embedding.keys():
                     self.elookup.init_row(self.evocab[word], external_embedding[word])
+                    if word == '_UNK_':
+                        self.elookup.init_row(0, external_embedding[word])
 
                 print 'Initialized with pre-trained embedding. Vector dimensions', edim, 'and', len(external_embedding),\
                     'words, number of training words', len(w2i) + 2

@@ -52,6 +52,7 @@ if __name__ == '__main__':
     parser.add_option("--layer", type="int", dest="layer", default=3)
     parser.add_option("--rnn", type="int", dest="rnn", help='dimension of rnn in each direction', default=200)
     parser.add_option("--predict", action="store_true", dest="predictFlag", default=False)
+    parser.add_option("--eval_non_avg", action="store_true", dest="eval_non_avg", default=False)
     parser.add_option("--no_anneal", action="store_false", dest="anneal", default=True)
     parser.add_option("--no_char", action="store_false", dest="use_char", default=True)
     parser.add_option("--no_pos", action="store_false", dest="use_pos", default=True)
@@ -117,6 +118,16 @@ if __name__ == '__main__':
                 if t%10==0:
                     sys.stdout.write('overall progress:' + str(round(100 * float(t) / options.t, 2)) + '% current progress:' + str(round(100 * float(i + 1) / len(mini_batches), 2)) + '% loss=' + str(closs / 10) + ' time: ' + str(time.time() - start) + '\n')
                     if t%100==0:
+                        if options.eval_non_avg:
+                            uas, las = test(parser, dev_buckets, options.conll_dev, options.output + '/dev.out')
+                            print 'dev non-avg acc', las, uas
+                            if las > best_las:
+                                best_las = las
+                                print 'saving non-avg with', best_las, uas
+                                parser.Save(options.output + '/model')
+                                no_improvement = 0
+                            else:
+                                no_improvement += 1
                         avg_model = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, options, parser)
                         uas, las = test(avg_model, dev_buckets, options.conll_dev, options.output+'/dev.out')
                         print 'dev avg acc', las, uas

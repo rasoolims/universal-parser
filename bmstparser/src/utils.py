@@ -103,55 +103,40 @@ def get_batches(buckets, model, is_train):
                 cur_len = max(cur_len, len(d))
 
             if cur_len * len(batch) >= model.options.batch:
-                words = np.array([np.array(
-                    [model.vocab.get(batch[i][j].norm, 0) if j < len(batch[i]) else model.PAD for i in
-                     range(len(batch))]) for j in range(cur_len)])
-                pwords = np.array([np.array(
-                    [model.evocab.get(batch[i][j].norm, 0) if j < len(batch[i]) else model.PAD for i in
-                     range(len(batch))]) for j in range(cur_len)])
-                pos = np.array([np.array(
-                    [model.pos.get(batch[i][j].pos, 0) if j < len(batch[i]) else model.PAD for i in
-                     range(len(batch))]) for j in range(cur_len)])
-                heads = np.array(
-                    [np.array([batch[i][j].head if 0 < j < len(batch[i]) else 0 for i in range(len(batch))]) for j
-                     in range(cur_len)])
-                relations = np.array([np.array(
-                    [model.rels.get(batch[i][j].relation, 0) if j < len(batch[i]) else model.PAD_REL for i in
-                     range(len(batch))]) for j in range(cur_len)])
-                chars = np.array([[[model.chars.get(batch[i][j].form[c].lower(), 0) if 0 < j < len(batch[i]) and c < len(batch[i][j].form) else (1 if j==0 and c==0 else 0) for i in range(len(batch))] for j in range(cur_len)]for c in range(cur_c_len)])
-                chars = np.transpose(np.reshape(chars, (len(batch)*cur_len, cur_c_len)))
-                masks = np.array([np.array([1 if 0 < j < len(batch[i]) else 0 for i in range(len(batch))]) for j in
-                                  range(cur_len)])
-                mini_batches.append((words, pwords, pos, heads, relations, chars, masks))
+                add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model)
                 batch, cur_len, cur_c_len = [], 0, 0
 
-    if len(batch)>0 and not is_train:
-        words = np.array([np.array(
-            [model.vocab.get(batch[i][j].norm, 0) if j < len(batch[i]) else model.PAD for i in
-             range(len(batch))]) for j in range(cur_len)])
-        pwords = np.array([np.array(
-            [model.evocab.get(batch[i][j].norm, 0) if j < len(batch[i]) else model.PAD for i in
-             range(len(batch))]) for j in range(cur_len)])
-        pos = np.array([np.array(
-            [model.pos.get(batch[i][j].pos, 0) if j < len(batch[i]) else model.PAD for i in
-             range(len(batch))]) for j in range(cur_len)])
-        heads = np.array(
-            [np.array([batch[i][j].head if 0 < j < len(batch[i]) else 0 for i in range(len(batch))]) for j
-             in range(cur_len)])
-        relations = np.array([np.array(
-            [model.rels.get(batch[i][j].relation, 0) if j < len(batch[i]) else model.PAD_REL for i in
-             range(len(batch))]) for j in range(cur_len)])
-        chars = np.array([[[model.chars.get(batch[i][j].form[c].lower(), 0) if 0 < j < len(batch[i]) and c < len(
-            batch[i][j].form) else (1 if j == 0 and c == 0 else 0) for i in range(len(batch))] for j in range(cur_len)]
-                          for c in range(cur_c_len)])
-        chars = np.transpose(np.reshape(chars, (len(batch) * cur_len, cur_c_len)))
-        masks = np.array([np.array([1 if 0 < j < len(batch[i]) else 0 for i in range(len(batch))]) for j in
-                          range(cur_len)])
-        mini_batches.append((words, pwords, pos, heads, relations, chars, masks))
+    if len(batch)>0:
+        add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model)
         batch, cur_len = [], 0
     if is_train:
         random.shuffle(mini_batches)
     return mini_batches
+
+
+def add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model):
+    words = np.array([np.array(
+        [model.vocab.get(batch[i][j].norm, 0) if j < len(batch[i]) else model.PAD for i in
+         range(len(batch))]) for j in range(cur_len)])
+    pwords = np.array([np.array(
+        [model.evocab.get(batch[i][j].norm, 0) if j < len(batch[i]) else model.PAD for i in
+         range(len(batch))]) for j in range(cur_len)])
+    pos = np.array([np.array(
+        [model.pos.get(batch[i][j].pos, 0) if j < len(batch[i]) else model.PAD for i in
+         range(len(batch))]) for j in range(cur_len)])
+    heads = np.array(
+        [np.array([batch[i][j].head if 0 < j < len(batch[i]) else 0 for i in range(len(batch))]) for j
+         in range(cur_len)])
+    relations = np.array([np.array(
+        [model.rels.get(batch[i][j].relation, 0) if j < len(batch[i]) else model.PAD_REL for i in
+         range(len(batch))]) for j in range(cur_len)])
+    chars = np.array([[[model.chars.get(batch[i][j].form[c].lower(), 0) if 0 < j < len(batch[i]) and c < len(
+        batch[i][j].form) else (1 if j == 0 and c == 0 else 0) for i in range(len(batch))] for j in range(cur_len)] for
+                      c in range(cur_c_len)])
+    chars = np.transpose(np.reshape(chars, (len(batch) * cur_len, cur_c_len)))
+    masks = np.array([np.array([1 if 0 < j < len(batch[i]) else 0 for i in range(len(batch))]) for j in
+                      range(cur_len)])
+    mini_batches.append((words, pwords, pos, heads, relations, chars, masks))
 
 
 def is_punc(pos):

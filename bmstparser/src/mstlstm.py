@@ -104,9 +104,13 @@ class MSTParserLSTM:
                 for j in range(len(params)):
                     dim = params[j].expr().dim()
                     if (j+1)%3==0: # bias
-                        this_layer.append(np.ndarray(shape=(dim[0][0],), dtype=float))
+                        x = np.ndarray(shape=(dim[0][0],), dtype=float)
+                        x.fill(0)
+                        this_layer.append(x)
                     else:
-                        this_layer.append(np.ndarray(shape=(dim[0][0],dim[0][1]), dtype=float))
+                        x = np.ndarray(shape=(dim[0][0],dim[0][1]), dtype=float)
+                        x.fill(0)
+                        this_layer.append(x)
                 self.a_lstms.append(this_layer)
 
             if options.use_char:

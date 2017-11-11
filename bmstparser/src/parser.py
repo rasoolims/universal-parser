@@ -151,8 +151,6 @@ if __name__ == '__main__':
                         print 'saving non-avg with', best_las, uas
                         parser.Save(options.output + '/model')
                         no_improvement = 0
-                    else:
-                        no_improvement += 1
                 avg_model = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, options, parser)
                 uas, las = test(avg_model, dev_buckets, options.conll_dev, options.output + '/dev.out')
                 print 'dev avg acc', las, uas
@@ -161,8 +159,6 @@ if __name__ == '__main__':
                     print 'saving avg with', best_las, uas
                     avg_model.Save(options.output + '/model')
                     no_improvement = 0
-                else:
-                    no_improvement += 1
 
             if no_improvement>options.stop:
                 print 'No improvements after',no_improvement, 'steps -> terminating.'

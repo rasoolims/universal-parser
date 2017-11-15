@@ -106,12 +106,10 @@ if __name__ == '__main__':
             dev_buckets[0].append(d)
         best_las = 0
         no_improvement = 0
-        data_pass = 0
         while t<=options.t:
             print 'Starting epoch', epoch, 'time:', time.ctime()
             mini_batches = utils.get_batches(buckets, parser, True)
             start, closs = time.time(), 0
-            data_pass+=1
             for i, minibatch in enumerate(mini_batches):
                 t, loss = parser.build_graph(minibatch, t, True)
                 if parser.options.anneal:
@@ -143,24 +141,6 @@ if __name__ == '__main__':
                         else:
                             no_improvement += 1
                     start, closs = time.time(), 0
-
-            if data_pass%10==0:
-                if options.eval_non_avg:
-                    uas, las = test(parser, dev_buckets, options.conll_dev, options.output + '/dev.out')
-                    print 'dev non-avg acc', las, uas
-                    if las > best_las:
-                        best_las = las
-                        print 'saving non-avg with', best_las, uas
-                        parser.Save(options.output + '/model')
-                        no_improvement = 0
-                avg_model = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, options, parser)
-                uas, las = test(avg_model, dev_buckets, options.conll_dev, options.output + '/dev.out')
-                print 'dev avg acc', las, uas
-                if las > best_las:
-                    best_las = las
-                    print 'saving avg with', best_las, uas
-                    avg_model.Save(options.output + '/model')
-                    no_improvement = 0
 
             if no_improvement>options.stop:
                 print 'No improvements after',no_improvement, 'steps -> terminating.'

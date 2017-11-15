@@ -72,10 +72,12 @@ if __name__ == '__main__':
         parser = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, stored_opt)
         parser.Load(options.model)
         ts = time.time()
+        print 'loading buckets'
         test_buckets = [list()]
         test_data = list(utils.read_conll(open(options.conll_test, 'r')))
         for d in test_data:
             test_buckets[0].append(d)
+        print 'parsing'
         test(parser, test_buckets, options.conll_test, options.conll_output)
         te = time.time()
         print 'Finished predicting test.', te-ts, 'seconds.'

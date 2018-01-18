@@ -105,11 +105,11 @@ def get_batches(buckets, model, is_train):
                 batch_len += 1
 
             if cur_len * batch_len >= model.options.batch:
-                mini_batches.append(get_minibatch(batch, cur_c_len, cur_len, mini_batches, model))
+                mini_batches.append(get_minibatch(batch, cur_c_len, cur_len, model))
                 batch, cur_len, cur_c_len, batch_len = [], 0, 0, 0
 
     if len(batch) > 0:
-        mini_batches.append(get_minibatch(batch, cur_c_len, cur_len, mini_batches, model))
+        mini_batches.append(get_minibatch(batch, cur_c_len, cur_len, model))
     if is_train:
         random.shuffle(mini_batches)
     return mini_batches

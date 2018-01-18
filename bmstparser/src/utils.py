@@ -115,11 +115,10 @@ def get_batches(buckets, model, is_train):
     return mini_batches
 
 
-def get_minibatch(batch, cur_c_len, cur_len, model):
+def get_minibatch(batch, max_c_len, cur_len, model):
     all_batches = []
     for lang_id in batch.keys():
         all_batches += batch[lang_id]
-    max_c_len = max(cur_c_len.values())
     langs = [all_batches[i][2] for i in range(len(all_batches))]
     chars, pwords, pos = dict(), dict(), dict()
     for lang_id in batch.keys():

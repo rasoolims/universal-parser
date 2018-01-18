@@ -54,7 +54,6 @@ class MSTParserLSTM:
                 for j in range(len(params)):
                     params[j].set_value(char_lstm_params[lang][i][j])
                     params[j].set_updated(False)
-            self.char_lstm[lang].set_updated(False)
 
             self.proj_mat[lang] = self.model.add_parameters((edim + options.pe, edim + options.pe), init=dy.NumpyInitializer(proj_mat_params[lang]))
             self.proj_mat[lang].set_updated(False)
@@ -76,7 +75,7 @@ class MSTParserLSTM:
             params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
             for j in range(len(params)):
                 params[j].set_value(deep_lstm_params[i][j])
-        self.deep_lstms.set_updated(False)
+                params[j].set_updated(False)
 
         w_mlp_arc = orthonormal_initializer(options.arc_mlp, options.rnn * 2)
         w_mlp_label = orthonormal_initializer(options.label_mlp, options.rnn * 2)

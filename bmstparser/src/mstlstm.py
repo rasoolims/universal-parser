@@ -7,7 +7,7 @@ import codecs, os, sys
 from linalg import *
 
 class MSTParserLSTM:
-    def __init__(self, pos, rels, options, chars, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params):
+    def __init__(self, pos, rels, options, chars, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params, net_options):
         self.model = dy.Model()
         self.PAD = 1
         self.options = options
@@ -21,8 +21,10 @@ class MSTParserLSTM:
         self.root_id = self.rels['root']
         self.irels = ['PAD'] + rels
         self.PAD_REL = 0
-        edim = options.we
+        edim = net_options.we
 
+        self.plookup = self.model.add_lookup_parameters((len(pos) + 2, net_options.pe), init = dy.NumpyInitializer(plookup_params))
+        self.plookup.set_updated(False)
         self.chars = dict()
         self.evocab = dict()
         self.clookup = dict()
@@ -45,10 +47,10 @@ class MSTParserLSTM:
 
             print 'Loaded vector', edim, 'and', len(external_embedding[lang]), 'for', lang
 
-            self.clookup[lang] = self.model.add_lookup_parameters((len(chars[lang]) + 2, options.ce), init=dy.NumpyInitializer(clookup_params[lang]))
+            self.clookup[lang] = self.model.add_lookup_parameters((len(chars[lang]) + 2, net_options.ce), init=dy.NumpyInitializer(clookup_params[lang]))
             self.clookup[lang].set_updated(False)
 
-            self.char_lstm[lang] = dy.BiRNNBuilder(1, options.ce, edim, self.model, dy.VanillaLSTMBuilder)
+            self.char_lstm[lang] = dy.BiRNNBuilder(1, net_options.ce, edim, self.model, dy.VanillaLSTMBuilder)
             for i in range(len(self.char_lstm[lang].builder_layers)):
                 builder = self.char_lstm[lang].builder_layers[i]
                 params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
@@ -56,7 +58,7 @@ class MSTParserLSTM:
                     params[j].set_value(char_lstm_params[lang][i][j])
                     params[j].set_updated(False)
 
-            self.proj_mat[lang] = self.model.add_parameters((edim + options.pe, edim + options.pe), init=dy.NumpyInitializer(proj_mat_params[lang]))
+            self.proj_mat[lang] = self.model.add_parameters((edim + net_options.pe, edim + net_options.pe), init=dy.NumpyInitializer(proj_mat_params[lang]))
             self.proj_mat[lang].set_updated(False)
 
         self.elookup = self.model.add_lookup_parameters((word_index, edim))
@@ -68,9 +70,9 @@ class MSTParserLSTM:
             for word in external_embedding[lang].keys():
                 self.elookup.init_row(self.evocab[lang][word], external_embedding[lang][word])
 
-        input_dim = edim + options.pe if self.options.use_pos else edim
+        input_dim = edim + net_options.pe if self.options.use_pos else edim
 
-        self.deep_lstms = dy.BiRNNBuilder(options.layer, input_dim, options.rnn * 2, self.model, dy.VanillaLSTMBuilder)
+        self.deep_lstms = dy.BiRNNBuilder(net_options.layer, input_dim, net_options.rnn * 2, self.model, dy.VanillaLSTMBuilder)
         for i in range(len(self.deep_lstms.builder_layers)):
             builder = self.deep_lstms.builder_layers[i]
             params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
@@ -114,9 +116,9 @@ class MSTParserLSTM:
 
     def bilinear(self, M, W, H, input_size, seq_len, batch_size, num_outputs=1, bias_x=False, bias_y=False):
         if bias_x:
-            M = dy. dy.concatenate([M, dy.inputTensor(np.ones((1, seq_len), dtype=np.float32))])
+            M = dy.concatenate([M, dy.inputTensor(np.ones((1, seq_len), dtype=np.float32))])
         if bias_y:
-            H = dy. dy.concatenate([H, dy.inputTensor(np.ones((1, seq_len), dtype=np.float32))])
+            H = dy.concatenate([H, dy.inputTensor(np.ones((1, seq_len), dtype=np.float32))])
 
         nx, ny = input_size + bias_x, input_size + bias_y
         lin = W * M
@@ -204,17 +206,18 @@ class MSTParserLSTM:
 
     def build_graph(self, mini_batch, t=1, train=True):
         H, M, HL, ML = self.rnn_mlp(mini_batch, train)
-        arc_scores = self.bilinear(M, self.w_arc.expr(), H, self.options.arc_mlp, mini_batch[0].shape[0], mini_batch[0].shape[1],1, True, False)
-        rel_scores = self.bilinear(ML, self.u_label.expr(), HL, self.options.label_mlp, mini_batch[0].shape[0], mini_batch[0].shape[1], len(self.irels), True, True)
-        flat_scores = dy.reshape(arc_scores, (mini_batch[0].shape[0],), mini_batch[0].shape[0]* mini_batch[0].shape[1])
-        flat_rel_scores = dy.reshape(rel_scores, (mini_batch[0].shape[0], len(self.irels)), mini_batch[0].shape[0]* mini_batch[0].shape[1])
+        shape_0, shape_1 = mini_batch[-3], mini_batch[-2]
+        arc_scores = self.bilinear(M, self.w_arc.expr(), H, self.options.arc_mlp, shape_0, shape_1,1, True, False)
+        rel_scores = self.bilinear(ML, self.u_label.expr(), HL, self.options.label_mlp, shape_0, shape_1, len(self.irels), True, True)
+        flat_scores = dy.reshape(arc_scores, (shape_0,), shape_0* shape_1)
+        flat_rel_scores = dy.reshape(rel_scores, (shape_0, len(self.irels)), shape_0* shape_1)
         masks = np.reshape(mini_batch[-1], (-1,), 'F')
         mask_1D_tensor = dy.inputTensor(masks, batched=True)
         n_tokens = np.sum(masks)
         if train:
-            heads = np.reshape(mini_batch[3], (-1,), 'F')
+            heads = np.reshape(mini_batch[2], (-1,), 'F')
             partial_rel_scores =  dy.pick_batch(flat_rel_scores, heads)
-            gold_relations = np.reshape(mini_batch[4], (-1,), 'F')
+            gold_relations = np.reshape(mini_batch[3], (-1,), 'F')
             arc_losses =  dy.pickneglogsoftmax_batch(flat_scores, heads)
             arc_loss = dy.sum_batches(arc_losses*mask_1D_tensor)/n_tokens
             rel_losses =  dy.pickneglogsoftmax_batch(partial_rel_scores, gold_relations)
@@ -229,9 +232,9 @@ class MSTParserLSTM:
             # self.moving_avg(ratio, 1 - ratio)
             return t + 1, loss
         else:
-            arc_probs = np. dy.transpose(np.reshape(dy.softmax(flat_scores).npvalue(), (mini_batch[0].shape[0],  mini_batch[0].shape[0],  mini_batch[0].shape[1]), 'F'))
+            arc_probs = np. dy.transpose(np.reshape(dy.softmax(flat_scores).npvalue(), (shape_0,  shape_0,  shape_1), 'F'))
             rel_probs = np. dy.transpose(np.reshape(dy.softmax( dy.transpose(flat_rel_scores)).npvalue(),
-                                                (len(self.irels), mini_batch[0].shape[0], mini_batch[0].shape[0], mini_batch[0].shape[1]), 'F'))
+                                                (len(self.irels), shape_0, shape_0, shape_1), 'F'))
             outputs = []
 
             for msk, arc_prob, rel_prob in zip(np. dy.transpose(mini_batch[-1]), arc_probs, rel_probs):

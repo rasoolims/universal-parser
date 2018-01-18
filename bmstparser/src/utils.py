@@ -121,6 +121,7 @@ def get_minibatch(batch, max_c_len, cur_len, model):
         all_batches += batch[lang_id]
         langs += [lang_id] * len(batch[lang_id])
     chars, pwords, pos = dict(), dict(), dict()
+    num_words = 0
     for lang_id in batch.keys():
         chars[lang_id] = np.array([[[model.chars[lang_id].get(batch[lang_id][i][j].form[c].lower(), 0)
                                      if 0 < j < len(batch[lang_id][i]) and c < len(batch[lang_id][i][j].form)
@@ -136,7 +137,7 @@ def get_minibatch(batch, max_c_len, cur_len, model):
         pos[lang_id] = np.array([np.array(
             [model.pos.get(batch[lang_id][i][j].pos, 0) if j < len(batch[lang_id][i]) else model.PAD for i in
              range(len(batch[lang_id]))]) for j in range(cur_len)])
-    masks = np.array([np.array([1 if 0 < j < len(all_batches[i][0]) else 0 for i in range(len(all_batches))])
+    masks = np.array([np.array([1 if 0 < j < len(all_batches[i]) else 0 for i in range(len(all_batches))])
                       for j in range(cur_len)])
     heads = np.array([np.array(
         [all_batches[i][j].head if 0 < j < len(all_batches[i]) and all_batches[i][j].head >= 0 else 0 for i in
@@ -145,7 +146,7 @@ def get_minibatch(batch, max_c_len, cur_len, model):
         [model.rels.get(all_batches[i][j].relation, 0) if j < len(all_batches[i]) else model.PAD_REL for i in
          range(len(all_batches))]) for j in range(cur_len)])
 
-    mini_batch = (pwords, pos, heads, relations, chars, langs, masks)
+    mini_batch = (pwords, pos, heads, relations, chars, langs, cur_len, len(all_batches), masks)
     return mini_batch
 
 

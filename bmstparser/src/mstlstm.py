@@ -130,12 +130,12 @@ class MSTParserLSTM:
         return blin
 
     def __evaluate(self, H, M):
-        M2 = dy. dy.concatenate([M, dy.inputTensor(np.ones((1, M.dim()[0][1]), dtype=np.float32))])
+        M2 = dy.concatenate([M, dy.inputTensor(np.ones((1, M.dim()[0][1]), dtype=np.float32))])
         return  dy.transpose(H)*(self.w_arc.expr()*M2)
 
     def __evaluateLabel(self, i, j, HL, ML):
-        H2 = dy. dy.concatenate([HL, dy.inputTensor(np.ones((1, HL.dim()[0][1]), dtype=np.float32))])
-        M2 = dy. dy.concatenate([ML, dy.inputTensor(np.ones((1, ML.dim()[0][1]), dtype=np.float32))])
+        H2 = dy.concatenate([HL, dy.inputTensor(np.ones((1, HL.dim()[0][1]), dtype=np.float32))])
+        M2 = dy.concatenate([ML, dy.inputTensor(np.ones((1, ML.dim()[0][1]), dtype=np.float32))])
         h, m =  dy.transpose(H2),  dy.transpose(M2)
         return dy.reshape( dy.transpose(h[i]) * self.u_label.expr(), (len(self.irels), self.options.label_mlp+1)) * m[j]
 
@@ -194,7 +194,7 @@ class MSTParserLSTM:
         d = self.options.dropout
         h_out = self.bi_rnn(lstm_input, lstm_input[0].dim()[1], d if train else 0, d if train else 0)
 
-        h =  dy.dropout_dim( dy.concatenate_cols(h_out), 1, d) if train else dy. dy.concatenate_cols(h_out)
+        h =  dy.dropout_dim( dy.concatenate_cols(h_out), 1, d) if train else dy.concatenate_cols(h_out)
         H = self.activation( dy.affine_transform([self.arc_mlp_head_b.expr(), self.arc_mlp_head.expr(), h]))
         M = self.activation( dy.affine_transform([self.arc_mlp_dep_b.expr(), self.arc_mlp_dep.expr(), h]))
         HL = self.activation( dy.affine_transform([self.label_mlp_head_b.expr(), self.label_mlp_head.expr(), h]))

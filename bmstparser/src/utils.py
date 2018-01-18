@@ -125,7 +125,8 @@ def get_minibatch(batch, max_c_len, cur_len, model):
         chars[lang_id] = np.array([[[model.chars[lang_id].get(batch[lang_id][i][j].form[c].lower(), 0)
                                      if 0 < j < len(batch[lang_id][i]) and c < len(batch[lang_id][i][j].form)
                                      else (1 if j == 0 and c == 0 else 0)
-                                     for i in range(len(batch[lang_id]))] for j in range(cur_len)]
+                                     for i in range(len(batch[lang_id]))]
+                                     for j in range(cur_len)]
                                      for c in range(max_c_len)])
         chars[lang_id] = np.transpose(np.reshape(chars[lang_id], (len(batch[lang_id]) * cur_len, max_c_len)))
         pwords[lang_id] = np.array([np.array(

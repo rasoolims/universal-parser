@@ -11,8 +11,8 @@ class ConllEntry:
         self.id = id
         self.form = form.lower()  # assuming everything is lowercased.
         self.norm = normalize(form)
-        self.fpos = fpos.upper()
         self.pos = pos.upper()
+        self.fpos = fpos.upper()
         self.head = head
         self.relation = relation
 
@@ -106,7 +106,7 @@ def get_batches(buckets, model, is_train):
 
             if cur_len * batch_len >= model.options.batch:
                 mini_batches.append(get_minibatch(batch, cur_c_len, cur_len, model))
-                batch, cur_len, cur_c_len, batch_len = [], 0, 0, 0
+                batch, cur_len, cur_c_len, batch_len = defaultdict(list), 0, 0, 0
 
     if len(batch) > 0:
         mini_batches.append(get_minibatch(batch, cur_c_len, cur_len, model))
@@ -116,24 +116,24 @@ def get_batches(buckets, model, is_train):
 
 
 def get_minibatch(batch, max_c_len, cur_len, model):
-    all_batches = []
+    all_batches, langs = [], []
     for lang_id in batch.keys():
         all_batches += batch[lang_id]
-    langs = [all_batches[i][2] for i in range(len(all_batches))]
+        langs += [lang_id] * len(batch[lang_id])
     chars, pwords, pos = dict(), dict(), dict()
     for lang_id in batch.keys():
-        chars[lang_id] = np.array([[[model.chars[lang_id].get(batch[lang_id][i][0][j][c].lower(), 0)
-                                     if 0 < j < len(batch[lang_id][i][0]) and c < len(batch[lang_id][i][0][j]) else (
-        1 if j == 0 and c == 0 else 0)
-                                     for i in range(len(batch[lang_id]))] for j in range(cur_len)] for
-                                   c in range(max_c_len)])
+        chars[lang_id] = np.array([[[model.chars[lang_id].get(batch[lang_id][i][j].form[c].lower(), 0)
+                                     if 0 < j < len(batch[lang_id][i]) and c < len(batch[lang_id][i][j].form)
+                                     else (1 if j == 0 and c == 0 else 0)
+                                     for i in range(len(batch[lang_id]))] for j in range(cur_len)]
+                                     for c in range(max_c_len)])
         chars[lang_id] = np.transpose(np.reshape(chars[lang_id], (len(batch[lang_id]) * cur_len, max_c_len)))
         pwords[lang_id] = np.array([np.array(
-            [model.evocab[langs[i]].get(batch[lang_id][i][0][j], 0) if j < len(batch[lang_id][i][0]) else model.PAD for
+            [model.evocab[langs[i]].get(batch[lang_id][i][j].form, 0) if j < len(batch[lang_id][i]) else model.PAD for
              i in
              range(len(batch[lang_id]))]) for j in range(cur_len)])
         pos[lang_id] = np.array([np.array(
-            [model.pos.get(batch[lang_id][i][1][j], 0) if j < len(batch[lang_id][i][1]) else model.PAD for i in
+            [model.pos.get(batch[lang_id][i][j].pos, 0) if j < len(batch[lang_id][i]) else model.PAD for i in
              range(len(batch[lang_id]))]) for j in range(cur_len)])
     masks = np.array([np.array([1 if 0 < j < len(all_batches[i][0]) else 0 for i in range(len(all_batches))])
                       for j in range(cur_len)])

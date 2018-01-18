@@ -46,6 +46,7 @@ class MSTParserLSTM:
             print 'Loaded vector', edim, 'and', len(external_embedding[lang]), 'for', lang
 
             self.clookup[lang] = self.model.add_lookup_parameters((len(chars[lang]) + 2, options.ce), init=dy.NumpyInitializer(clookup_params[lang]))
+            self.clookup[lang].set_updated(False)
 
             self.char_lstm[lang] = dy.BiRNNBuilder(1, options.ce, edim, self.model, dy.VanillaLSTMBuilder)
             for i in range(len(self.char_lstm[lang].builder_layers)):

@@ -52,7 +52,7 @@ class MSTParserLSTM:
                 builder = self.char_lstm[lang].builder_layers[i]
                 params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
                 for j in range(len(params)):
-                    params[j].set_value(shared_rnn_model.char_lstm[lang][i][j].expr().npvalue())
+                    params[j].set_value(shared_rnn_model.char_lstm[lang].builder_layers[i][j].expr().npvalue())
             self.char_lstm[lang].set_updated(False)
 
             self.proj_mat[lang] = self.model.add_parameters((edim + options.pe, edim + options.pe), init=dy.NumpyInitializer(shared_rnn_model.proj_mat[lang].expr().npvalue()))
@@ -74,7 +74,7 @@ class MSTParserLSTM:
             builder = self.deep_lstms.builder_layers[i]
             params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
             for j in range(len(params)):
-                params[j].set_value(shared_rnn_model.deep_lstms[i][j].expr().npvalue())
+                params[j].set_value(shared_rnn_model.deep_lstms.builder_layers[i][j].expr().npvalue())
         self.deep_lstms.set_updated(False)
 
         w_mlp_arc = orthonormal_initializer(options.arc_mlp, options.rnn * 2)

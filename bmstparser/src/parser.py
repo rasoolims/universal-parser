@@ -1,6 +1,6 @@
 from optparse import OptionParser
 import pickle, utils, mstlstm, sys, os.path, time
-
+import shared_rnn_model
 
 def test(parser, buckets, test_file, output_file):
     results = list()
@@ -28,9 +28,9 @@ def test(parser, buckets, test_file, output_file):
 
 if __name__ == '__main__':
     parser = OptionParser()
-    parser.add_option("--train", dest="conll_train", help="Annotated CONLL train file", metavar="FILE", default="../data/en-universal-train.conll.ptb")
-    parser.add_option("--dev", dest="conll_dev", help="Annotated CONLL dev file", metavar="FILE", default="../data/en-universal-dev.conll.ptb")
-    parser.add_option("--test", dest="conll_test", help="Annotated CONLL test file", metavar="FILE", default="../data/en-universal-test.conll.ptb")
+    parser.add_option("--train", dest="conll_train", help="Annotated CONLL train file", metavar="FILE", default=None)
+    parser.add_option("--dev", dest="conll_dev", help="Annotated CONLL dev file", metavar="FILE", default=None)
+    parser.add_option("--test", dest="conll_test", help="Annotated CONLL test file", metavar="FILE", default=None)
     parser.add_option("--output", dest="conll_output",  metavar="FILE", default=None)
     parser.add_option("--extrn", dest="external_embedding", help="External embeddings", metavar="FILE")
     parser.add_option("--params", dest="params", help="Parameters file", metavar="FILE", default="params.pickle")
@@ -48,6 +48,7 @@ if __name__ == '__main__':
     parser.add_option("--beta2", type="float", dest="beta2", default=0.9)
     parser.add_option("--dropout", type="float", dest="dropout", default=0.33)
     parser.add_option("--outdir", type="string", dest="output", default="results")
+    parser.add_option("--netdir", metavar="FILE", dest="netdir", default=None)
     parser.add_option("--activation", type="string", dest="activation", default="leaky")
     parser.add_option("--layer", type="int", dest="layer", default=3)
     parser.add_option("--rnn", type="int", dest="rnn", help='dimension of rnn in each direction', default=200)
@@ -70,7 +71,7 @@ if __name__ == '__main__':
         print stored_opt
         print 'Initializing lstm mstparser:'
         parser = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, stored_opt)
-        parser.Load(options.model)
+        parser.load(options.model)
         ts = time.time()
         print 'loading buckets'
         test_buckets = [list()]
@@ -82,15 +83,23 @@ if __name__ == '__main__':
         te = time.time()
         print 'Finished predicting test.', te-ts, 'seconds.'
     else:
+        print 'reading shared model'
+        with open(options.netdir+'/params.pickle', 'r') as paramsfp:
+            chars, net_options = pickle.load(paramsfp)
+        universal_tags = ['ADJ', 'ADP', 'ADV', 'AUX', 'CCONJ', 'DET', 'INTJ', 'NOUN', 'NUM', 'PART', 'PRON', 'PROPN',
+                          'PUNCT', 'SCONJ', 'SYM', 'VERB', 'X']
+        sharedRNN_network = shared_rnn_model.Network(universal_tags, chars, net_options)
+        sharedRNN_network.load(options.netdir+'/model')
+
         print 'Preparing vocab'
-        w2i, pos, rels, chars = utils.vocab(options.conll_train)
+        rels = utils.vocab(options.conll_train)
         if not os.path.isdir(options.output): os.mkdir(options.output)
         with open(os.path.join(options.output, options.params), 'w') as paramsfp:
-            pickle.dump((w2i, pos, rels, chars, options), paramsfp)
+            pickle.dump((rels, options), paramsfp)
         print 'Finished collecting vocab'
 
         print 'Initializing lstm mstparser:'
-        parser = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, options)
+        parser = mstlstm.MSTParserLSTM(universal_tags, rels, chars, options, sharedRNN_network)
         best_acc = -float('inf')
         t, epoch = 0,1
         train_data = list(utils.read_conll(open(options.conll_train, 'r')))
@@ -126,20 +135,20 @@ if __name__ == '__main__':
                             if las > best_las:
                                 best_las = las
                                 print 'saving non-avg with', best_las, uas
-                                parser.Save(options.output + '/model')
+                                parser.save(options.output + '/model')
                                 no_improvement = 0
                             else:
                                 no_improvement += 1
-                        avg_model = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, options, parser)
-                        uas, las = test(avg_model, dev_buckets, options.conll_dev, options.output+'/dev.out')
-                        print 'dev avg acc', las, uas
-                        if las > best_las:
-                            best_las = las
-                            print 'saving avg with', best_las, uas
-                            avg_model.Save(options.output + '/model')
-                            no_improvement = 0
-                        else:
-                            no_improvement += 1
+                        # avg_model = mstlstm.MSTParserLSTM(universal_tags, rels, chars, options, parser)
+                        # uas, las = test(avg_model, dev_buckets, options.conll_dev, options.output+'/dev.out')
+                        # print 'dev avg acc', las, uas
+                        # if las > best_las:
+                        #     best_las = las
+                        #     print 'saving avg with', best_las, uas
+                        #     avg_model.save(options.output + '/model')
+                        #     no_improvement = 0
+                        # else:
+                        #     no_improvement += 1
                     start, closs = time.time(), 0
 
             if no_improvement>options.stop:

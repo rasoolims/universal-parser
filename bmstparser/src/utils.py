@@ -1,13 +1,15 @@
-from collections import Counter
-import re, codecs,sys, random
+from collections import Counter, defaultdict
+import re, codecs, sys, random
 import numpy as np
+
 reload(sys)
 sys.setdefaultencoding('utf8')
 
+
 class ConllEntry:
-    def __init__(self, id, form, lemma, pos, fpos, feats=None, head=None, relation=None, deps=None, misc=None):
+    def __init__(self, id, form, lemma, pos, fpos, lang_id='_', head=None, relation=None, deps=None, misc=None):
         self.id = id
-        self.form = form.lower() # assuming everything is lowercased.
+        self.form = form.lower()  # assuming everything is lowercased.
         self.norm = normalize(form)
         self.fpos = fpos.upper()
         self.pos = pos.upper()
@@ -15,7 +17,7 @@ class ConllEntry:
         self.relation = relation
 
         self.lemma = lemma
-        self.feats = feats
+        self.lang_id = lang_id
         self.deps = deps
         self.misc = misc
 
@@ -23,28 +25,20 @@ class ConllEntry:
         self.pred_relation = None
 
     def __str__(self):
-        values = [str(self.id), self.form, self.lemma, self.pos, self.fpos, self.feats, str(self.pred_parent_id) if self.pred_parent_id is not None else None, self.pred_relation, self.deps, self.misc]
+        values = [str(self.id), self.form, self.lemma, self.pos, self.fpos, self.lang_id,
+                  str(self.pred_parent_id) if self.pred_parent_id is not None else None, self.pred_relation, self.deps,
+                  self.misc]
         return '\t'.join(['_' if v is None else v for v in values])
 
+
 def vocab(conll_path, min_count=2):
-    wordsCount = Counter()
-    posCount = Counter()
     relCount = Counter()
-    chars = set()
     with open(conll_path, 'r') as conllFP:
         for sentence in read_conll(conllFP):
-            wordsCount.update([node.norm for node in sentence if isinstance(node, ConllEntry)])
-            posCount.update([node.pos for node in sentence if isinstance(node, ConllEntry)])
             relCount.update([node.relation for node in sentence if isinstance(node, ConllEntry)])
-            for node in sentence:
-                for c in list(node.form):
-                    chars.add(c.lower())
 
-    words = set()
-    for w in wordsCount.keys():
-        if wordsCount[w]>=min_count:
-            words.add(w)
-    return ({w: i for i, w in enumerate(words)}, list(posCount.keys()), list(relCount.keys()), list(chars))
+    return list(relCount.keys())
+
 
 def read_conll(fh):
     root = ConllEntry(0, '*root*', '*root*', 'ROOT-POS', 'ROOT-FPOS', '_', 0, 'root', '_', '_')
@@ -52,15 +46,17 @@ def read_conll(fh):
     for line in fh:
         tok = line.strip().split('\t')
         if not tok or line.strip() == '':
-            if len(tokens)>1: yield tokens
+            if len(tokens) > 1: yield tokens
             tokens = [root]
         else:
             if line[0] == '#' or '-' in tok[0] or '.' in tok[0]:
                 tokens.append(line.strip())
             else:
-                tokens.append(ConllEntry(int(tok[0]), tok[1], tok[2], tok[3], tok[4], tok[5], int(tok[6]) if tok[6] != '_' else -1, tok[7], tok[8], tok[9]))
+                tokens.append(ConllEntry(int(tok[0]), tok[1], tok[2], tok[3], tok[4], tok[5].strip(),
+                                         int(tok[6]) if tok[6] != '_' else -1, tok[7], tok[8], tok[9]))
     if len(tokens) > 1:
         yield tokens
+
 
 def write_conll(fn, conll_gen):
     with codecs.open(fn, 'w', encoding='utf-8') as fh:
@@ -68,6 +64,7 @@ def write_conll(fn, conll_gen):
             for entry in sentence[1:]:
                 fh.write(str(entry) + u'\n')
             fh.write('\n')
+
 
 def eval(gold, predicted):
     correct_deps, correct_l, all_deps = 0, 0, 0
@@ -80,13 +77,17 @@ def eval(gold, predicted):
                 all_deps += 1
                 if s1[6] == s2[6]:
                     correct_deps += 1
-                    if s1[7]==s2[7]:
-                        correct_l+=1
+                    if s1[7] == s2[7]:
+                        correct_l += 1
     return 100 * float(correct_deps) / all_deps, 100 * float(correct_l) / all_deps
 
+
 numberRegex = re.compile("[0-9]+|[0-9]+\\.[0-9]+|[0-9]+[0-9,]+");
+
+
 def normalize(word):
     return 'NUM' if numberRegex.match(word) else word.lower()
+
 
 def get_batches(buckets, model, is_train):
     d_copy = [buckets[i][:] for i in range(len(buckets))]
@@ -94,56 +95,64 @@ def get_batches(buckets, model, is_train):
         for dc in d_copy:
             random.shuffle(dc)
     mini_batches = []
-    batch, cur_len, cur_c_len = [], 0, 0
+    batch, cur_len, cur_c_len, batch_len = defaultdict(list), 0, 0, 0
     for dc in d_copy:
         for d in dc:
-            if (is_train and len(d)<=100) or not is_train:
-                batch.append(d)
+            if (is_train and len(d) <= 100) or not is_train:
+                batch[d[1].lang_id].append(d)
                 cur_c_len = max(cur_c_len, max([len(w.form) for w in d]))
                 cur_len = max(cur_len, len(d))
+                batch_len += 1
 
-            if cur_len * len(batch) >= model.options.batch:
-                add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model)
-                batch, cur_len, cur_c_len = [], 0, 0
+            if cur_len * batch_len >= model.options.batch:
+                mini_batches.append(get_minibatch(batch, cur_c_len, cur_len, mini_batches, model))
+                batch, cur_len, cur_c_len, batch_len = [], 0, 0, 0
 
-    if len(batch)>0:
-        add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model)
-        batch, cur_len = [], 0
+    if len(batch) > 0:
+        mini_batches.append(get_minibatch(batch, cur_c_len, cur_len, mini_batches, model))
     if is_train:
         random.shuffle(mini_batches)
     return mini_batches
 
 
-def add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model):
-    words = np.array([np.array(
-        [model.vocab.get(batch[i][j].norm, 0) if j < len(batch[i]) else model.PAD for i in
-         range(len(batch))]) for j in range(cur_len)])
-    pwords = np.array([np.array(
-        [model.evocab.get(batch[i][j].norm, 0) if j < len(batch[i]) else model.PAD for i in
-         range(len(batch))]) for j in range(cur_len)])
-    pos = np.array([np.array(
-        [model.pos.get(batch[i][j].pos, 0) if j < len(batch[i]) else model.PAD for i in
-         range(len(batch))]) for j in range(cur_len)])
-    heads = np.array(
-        [np.array([batch[i][j].head if 0 < j < len(batch[i]) and batch[i][j].head>=0 else 0 for i in range(len(batch))]) for j
-         in range(cur_len)])
+def get_minibatch(batch, cur_c_len, cur_len, model):
+    all_batches = []
+    for lang_id in batch.keys():
+        all_batches += batch[lang_id]
+    max_c_len = max(cur_c_len.values())
+    langs = [all_batches[i][2] for i in range(len(all_batches))]
+    chars, pwords, pos = dict(), dict(), dict()
+    for lang_id in batch.keys():
+        chars[lang_id] = np.array([[[model.chars[lang_id].get(batch[lang_id][i][0][j][c].lower(), 0)
+                                     if 0 < j < len(batch[lang_id][i][0]) and c < len(batch[lang_id][i][0][j]) else (
+        1 if j == 0 and c == 0 else 0)
+                                     for i in range(len(batch[lang_id]))] for j in range(cur_len)] for
+                                   c in range(max_c_len)])
+        chars[lang_id] = np.transpose(np.reshape(chars[lang_id], (len(batch[lang_id]) * cur_len, max_c_len)))
+        pwords[lang_id] = np.array([np.array(
+            [model.evocab[langs[i]].get(batch[lang_id][i][0][j], 0) if j < len(batch[lang_id][i][0]) else model.PAD for
+             i in
+             range(len(batch[lang_id]))]) for j in range(cur_len)])
+        pos[lang_id] = np.array([np.array(
+            [model.pos.get(batch[lang_id][i][1][j], 0) if j < len(batch[lang_id][i][1]) else model.PAD for i in
+             range(len(batch[lang_id]))]) for j in range(cur_len)])
+    masks = np.array([np.array([1 if 0 < j < len(all_batches[i][0]) else 0 for i in range(len(all_batches))])
+                      for j in range(cur_len)])
+    heads = np.array([np.array(
+        [all_batches[i][j].head if 0 < j < len(all_batches[i]) and all_batches[i][j].head >= 0 else 0 for i in
+         range(len(all_batches))]) for j in range(cur_len)])
     relations = np.array([np.array(
-        [model.rels.get(batch[i][j].relation, 0) if j < len(batch[i]) else model.PAD_REL for i in
-         range(len(batch))]) for j in range(cur_len)])
-    chars = np.array([[[model.chars.get(batch[i][j].form[c].lower(), 0) if 0 < j < len(batch[i]) and c < len(
-        batch[i][j].form) else (1 if j == 0 and c == 0 else 0) for i in range(len(batch))] for j in range(cur_len)] for
-                      c in range(cur_c_len)])
-    chars = np.transpose(np.reshape(chars, (len(batch) * cur_len, cur_c_len)))
-    masks = np.array([np.array([1 if 0 < j < len(batch[i]) and batch[i][j].head>=0 else 0 for i in range(len(batch))]) for j in
-                      range(cur_len)])
-    mini_batches.append((words, pwords, pos, heads, relations, chars, masks))
+        [model.rels.get(all_batches[i][j].relation, 0) if j < len(all_batches[i]) else model.PAD_REL for i in
+         range(len(all_batches))]) for j in range(cur_len)])
+
+    mini_batch = (pwords, pos, heads, relations, chars, langs, masks)
+    return mini_batch
 
 
 def is_punc(pos):
-	return  pos=='.' or pos=='PUNC' or pos =='PUNCT' or \
-        pos=="#" or pos=="''" or pos=="(" or \
-		pos=="[" or pos=="]" or pos=="{" or pos=="}" or \
-		pos=="\"" or pos=="," or pos=="." or pos==":" or \
-		pos=="``" or pos=="-LRB-" or pos=="-RRB-" or pos=="-LSB-" or \
-		pos=="-RSB-" or pos=="-LCB-" or pos=="-RCB-" or pos=='"' or pos==')'
-
+    return pos == '.' or pos == 'PUNC' or pos == 'PUNCT' or \
+           pos == "#" or pos == "''" or pos == "(" or \
+           pos == "[" or pos == "]" or pos == "{" or pos == "}" or \
+           pos == "\"" or pos == "," or pos == "." or pos == ":" or \
+           pos == "``" or pos == "-LRB-" or pos == "-RRB-" or pos == "-LSB-" or \
+           pos == "-RSB-" or pos == "-LCB-" or pos == "-RCB-" or pos == '"' or pos == ')'

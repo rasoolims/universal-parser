@@ -1,164 +1,94 @@
-from dynet import *
+import dynet as dy
 from utils import read_conll, write_conll
 from operator import itemgetter
 import utils, time, random, decoder, gzip
 import numpy as np
-import codecs
+import codecs, os, sys
 from linalg import *
 
 class MSTParserLSTM:
-    def __init__(self, pos, rels, w2i, chars, options, from_model=None):
-        self.model = Model()
+    def __init__(self, pos, rels, chars, options, shared_rnn_model):
+        self.model = dy.Model()
         self.PAD = 1
         self.options = options
-        self.trainer = AdamTrainer(self.model, options.lr, options.beta1, options.beta2)
-        self.activations = {'tanh': tanh, 'sigmoid': logistic, 'relu': rectify, 'leaky': (lambda x: bmax(.1 * x, x))}
+        self.trainer = dy.AdamTrainer(self.model, options.lr, options.beta1, options.beta2)
+        self.activations = {'tanh': dy.tanh, 'sigmoid': dy.logistic, 'relu': dy.rectify, 'leaky': (lambda x: dy.bmax(.1 * x, x))}
         self.activation = self.activations[options.activation]
         self.dropout = False if options.dropout == 0.0 else True
-        self.vocab = {word: ind + 2 for word, ind in w2i.iteritems()}
-        self.pos = {word: ind + 2 for ind, word in enumerate(pos)}
+        self.pos = {p: ind + 2 for ind, p in enumerate(pos)}
         self.rels = {word: ind + 1 for ind, word in enumerate(rels)}
         self.chars = {c: i + 2 for i, c in enumerate(chars)}
         self.root_id = self.rels['root']
         self.irels = ['PAD'] + rels
         self.PAD_REL = 0
         edim = options.we
-        if not from_model:
-            self.wlookup = self.model.add_lookup_parameters((len(w2i) + 2, edim))
-            self.elookup = None
-            if options.external_embedding is not None:
-                external_embedding_fp = gzip.open(options.external_embedding, 'r')
-                external_embedding = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in
-                                      external_embedding_fp if len(line.split(' ')) > 2}
-                external_embedding_fp.close()
-                self.evocab = {word: i + 2 for i, word in enumerate(external_embedding)}
 
-                edim = len(external_embedding.values()[0])
-                self.elookup = self.model.add_lookup_parameters((len(external_embedding) + 2, edim))
-                self.elookup.set_updated(False)
-                self.elookup.init_row(0, [0] * edim)
-                for word in external_embedding.keys():
-                    self.elookup.init_row(self.evocab[word], external_embedding[word])
-                    if word == '_UNK_':
-                        self.elookup.init_row(0, external_embedding[word])
+        self.chars = dict()
+        self.evocab = dict()
+        self.clookup = dict()
+        self.char_lstm = dict()
+        self.proj_mat = dict()
+        external_embedding = dict()
+        word_index = 2
+        for f in os.listdir(options.external_embedding):
+            lang = f[:-3]
+            efp = gzip.open(options.external_embedding + '/' + f, 'r')
+            external_embedding[lang] = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]]
+                                        for line in efp if len(line.split(' ')) > 2}
+            efp.close()
+            self.evocab[lang] = {word: i + word_index for i, word in enumerate(external_embedding[lang])}
+            word_index += len(self.evocab[lang])
 
-                print 'Initialized with pre-trained embedding. Vector dimensions', edim, 'and', len(external_embedding),\
-                    'words, number of training words', len(w2i) + 2
+            if len(external_embedding[lang]) > 0:
+                edim = len(external_embedding[lang].values()[0])
+            self.chars[lang] = {c: i + 2 for i, c in enumerate(chars[lang])}
 
-            self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe))
+            print 'Loaded vector', edim, 'and', len(external_embedding[lang]), 'for', lang
 
-            w_mlp_arc = orthonormal_initializer(options.arc_mlp, options.rnn * 2)
-            w_mlp_label = orthonormal_initializer(options.label_mlp, options.rnn * 2)
-            self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init= NumpyInitializer(w_mlp_arc))
-            self.arc_mlp_head_b = self.model.add_parameters((options.arc_mlp,), init = ConstInitializer(0))
-            self.label_mlp_head = self.model.add_parameters((options.label_mlp, options.rnn * 2), init= NumpyInitializer(w_mlp_label))
-            self.label_mlp_head_b = self.model.add_parameters((options.label_mlp,), init = ConstInitializer(0))
-            self.arc_mlp_dep = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init= NumpyInitializer(w_mlp_arc))
-            self.arc_mlp_dep_b = self.model.add_parameters((options.arc_mlp,), init = ConstInitializer(0))
-            self.label_mlp_dep = self.model.add_parameters((options.label_mlp, options.rnn * 2), init= NumpyInitializer(w_mlp_label))
-            self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init = ConstInitializer(0))
-            self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp+1), init = ConstInitializer(0))
-            self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp+1), options.label_mlp+1), init = ConstInitializer(0))
-            input_dim = edim + options.pe if self.options.use_pos else edim
-            self.deep_lstms = BiRNNBuilder(options.layer, input_dim, options.rnn * 2, self.model, VanillaLSTMBuilder)
-            for i in range(len(self.deep_lstms.builder_layers)):
-                builder = self.deep_lstms.builder_layers[i]
-                b0 = orthonormal_VanillaLSTMBuilder(builder[0], builder[0].spec[1], builder[0].spec[2])
-                b1 = orthonormal_VanillaLSTMBuilder(builder[1], builder[1].spec[1], builder[1].spec[2])
-                self.deep_lstms.builder_layers[i] = (b0, b1)
+            self.clookup[lang] = self.model.add_lookup_parameters((len(chars[lang]) + 2, options.ce), init=dy.NumpyInitializer(shared_rnn_model.clookup[lang].expr().npvalue()))
 
-            if options.use_char:
-                self.clookup = self.model.add_lookup_parameters((len(chars) + 2, options.ce))
-                self.char_lstm = BiRNNBuilder(1, options.ce, edim, self.model, VanillaLSTMBuilder)
-
-            self.a_wlookup = np.ndarray(shape=(options.we, len(w2i)+2), dtype=float)
-            self.a_wlookup.fill(0)
-            self.a_plookup = np.ndarray(shape=(options.pe, len(pos)+2), dtype=float)
-            self.a_plookup.fill(0)
-            self.a_arc_mlp_head = np.ndarray(shape=(options.arc_mlp, options.rnn * 2), dtype=float)
-            self.a_arc_mlp_head.fill(0)
-            self.a_arc_mlp_head_b = np.ndarray(shape=(options.arc_mlp,), dtype=float)
-            self.a_arc_mlp_head_b.fill(0)
-            self.a_label_mlp_head = np.ndarray(shape=(options.label_mlp, options.rnn * 2), dtype=float)
-            self.a_label_mlp_head.fill(0)
-            self.a_label_mlp_head_b = np.ndarray(shape=(options.label_mlp,), dtype=float)
-            self.a_label_mlp_head_b.fill(0)
-            self.a_arc_mlp_dep = np.ndarray(shape=(options.arc_mlp, options.rnn * 2), dtype=float)
-            self.a_arc_mlp_dep.fill(0)
-            self.a_arc_mlp_dep_b = np.ndarray(shape=(options.arc_mlp,), dtype=float)
-            self.a_arc_mlp_dep_b.fill(0)
-            self.a_label_mlp_dep = np.ndarray(shape=(options.label_mlp, options.rnn * 2), dtype=float)
-            self.a_label_mlp_dep.fill(0)
-            self.a_label_mlp_dep_b =  np.ndarray(shape=(options.label_mlp,), dtype=float)
-            self.a_label_mlp_dep_b.fill(0)
-            self.a_w_arc = np.ndarray(shape=(options.arc_mlp,options.arc_mlp+1), dtype=float)
-            self.a_w_arc.fill(0)
-            self.a_u_label = np.ndarray(shape=(len(self.irels) * (options.label_mlp + 1), options.label_mlp + 1), dtype=float)
-            self.a_u_label.fill(0)
-
-            self.a_lstms = []
-            for i in range(len(self.deep_lstms.builder_layers)):
-                builder = self.deep_lstms.builder_layers[i]
-                params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
-                this_layer = []
-                for j in range(len(params)):
-                    dim = params[j].expr().dim()
-                    if (j+1)%3==0: # bias
-                        x = np.ndarray(shape=(dim[0][0],), dtype=float)
-                        x.fill(0)
-                        this_layer.append(x)
-                    else:
-                        x = np.ndarray(shape=(dim[0][0],dim[0][1]), dtype=float)
-                        x.fill(0)
-                        this_layer.append(x)
-                self.a_lstms.append(this_layer)
-
-            if options.use_char:
-                self.a_clookup = np.ndarray(shape=(options.ce, len(chars) + 2), dtype=float)
-                self.ac_lstms = []
-                for i in range(len(self.char_lstm.builder_layers)):
-                    builder = self.char_lstm.builder_layers[i]
-                    params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
-                    this_layer = []
-                    for j in range(len(params)):
-                        dim = params[j].expr().dim()
-                        if (j + 1) % 3 == 0:  # bias
-                            this_layer.append(np.ndarray(shape=(dim[0][0],), dtype=float))
-                        else:
-                            this_layer.append(np.ndarray(shape=(dim[0][0], dim[0][1]), dtype=float))
-                    self.ac_lstms.append(this_layer)
-        else:
-            self.wlookup = self.model.add_lookup_parameters((len(w2i) + 2, edim), init=NumpyInitializer(from_model.a_wlookup))
-            if from_model.evocab:
-                self.evocab = from_model.evocab
-                self.elookup =  self.model.add_lookup_parameters((len(self.evocab) + 2, edim), init=NumpyInitializer(from_model.elookup.expr().npvalue()))
-            self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe), init=NumpyInitializer(from_model.a_plookup))
-            self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init=NumpyInitializer(from_model.a_arc_mlp_head))
-            self.arc_mlp_head_b = self.model.add_parameters((options.arc_mlp,),init=NumpyInitializer(from_model.a_arc_mlp_head_b))
-            self.label_mlp_head = self.model.add_parameters((options.label_mlp, options.rnn * 2),init=NumpyInitializer(from_model.a_label_mlp_head))
-            self.label_mlp_head_b = self.model.add_parameters((options.label_mlp,),init=NumpyInitializer(from_model.a_label_mlp_head_b))
-            self.arc_mlp_dep = self.model.add_parameters((options.arc_mlp, options.rnn * 2),init=NumpyInitializer(from_model.a_arc_mlp_dep))
-            self.arc_mlp_dep_b = self.model.add_parameters((options.arc_mlp,),init=NumpyInitializer(from_model.a_arc_mlp_dep_b))
-            self.label_mlp_dep = self.model.add_parameters((options.label_mlp, options.rnn * 2), init = NumpyInitializer(from_model.a_label_mlp_dep))
-            self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init = NumpyInitializer(from_model.a_label_mlp_dep_b))
-            self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp + 1), init = NumpyInitializer(from_model.a_w_arc))
-            self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp + 1), options.label_mlp + 1),init = NumpyInitializer(from_model.a_u_label))
-            input_dim = edim + options.pe if self.options.use_pos else edim
-            self.deep_lstms = BiRNNBuilder(options.layer, input_dim, options.rnn * 2, self.model, VanillaLSTMBuilder)
-            for i in range(len(self.deep_lstms.builder_layers)):
-                builder = self.deep_lstms.builder_layers[i]
+            self.char_lstm[lang] = dy.BiRNNBuilder(1, options.ce, edim, self.model, dy.VanillaLSTMBuilder)
+            for i in range(len(self.char_lstm[lang].builder_layers)):
+                builder = self.char_lstm[lang].builder_layers[i]
                 params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
                 for j in range(len(params)):
-                    params[j].set_value(from_model.a_lstms[i][j])
+                    params[j].set_value(shared_rnn_model.char_lstm[lang][i][j].expr().npvalue())
+            self.char_lstm[lang].set_updated(False)
 
-            if options.use_char:
-                self.clookup = self.model.add_lookup_parameters((len(chars) + 2, options.ce),  init=NumpyInitializer(from_model.a_clookup))
-                self.char_lstm = BiRNNBuilder(1, options.ce, edim, self.model, VanillaLSTMBuilder)
-                for i in range(len(self.char_lstm.builder_layers)):
-                    builder = self.char_lstm.builder_layers[i]
-                    params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
-                    for j in range(len(params)):
-                        params[j].set_value(from_model.ac_lstms[i][j])
+            self.proj_mat[lang] = self.model.add_parameters((edim + options.pe, edim + options.pe), init=dy.NumpyInitializer(shared_rnn_model.proj_mat[lang].expr().npvalue()))
+            self.proj_mat[lang].set_updated(False)
+
+        self.elookup = self.model.add_lookup_parameters((word_index, edim))
+        self.num_all_words = word_index
+        self.elookup.set_updated(False)
+        self.elookup.init_row(0, [0] * edim)
+        self.elookup.init_row(1, [0] * edim)
+        for lang in self.evocab.keys():
+            for word in external_embedding[lang].keys():
+                self.elookup.init_row(self.evocab[lang][word], external_embedding[lang][word])
+
+        input_dim = edim + options.pe if self.options.use_pos else edim
+
+        self.deep_lstms = dy.BiRNNBuilder(options.layer, input_dim, options.rnn * 2, self.model, dy.VanillaLSTMBuilder)
+        for i in range(len(self.deep_lstms.builder_layers)):
+            builder = self.deep_lstms.builder_layers[i]
+            params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
+            for j in range(len(params)):
+                params[j].set_value(shared_rnn_model.deep_lstms[i][j].expr().npvalue())
+        self.deep_lstms.set_updated(False)
+
+        w_mlp_arc = orthonormal_initializer(options.arc_mlp, options.rnn * 2)
+        w_mlp_label = orthonormal_initializer(options.label_mlp, options.rnn * 2)
+        self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init= dy.NumpyInitializer(w_mlp_arc))
+        self.arc_mlp_head_b = self.model.add_parameters((options.arc_mlp,), init = dy.ConstInitializer(0))
+        self.label_mlp_head = self.model.add_parameters((options.label_mlp, options.rnn * 2), init= dy.NumpyInitializer(w_mlp_label))
+        self.label_mlp_head_b = self.model.add_parameters((options.label_mlp,), init = dy.ConstInitializer(0))
+        self.arc_mlp_dep = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init= dy.NumpyInitializer(w_mlp_arc))
+        self.arc_mlp_dep_b = self.model.add_parameters((options.arc_mlp,), init = dy.ConstInitializer(0))
+        self.label_mlp_dep = self.model.add_parameters((options.label_mlp, options.rnn * 2), init= dy.NumpyInitializer(w_mlp_label))
+        self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init = dy.ConstInitializer(0))
+        self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp+1), init = dy.ConstInitializer(0))
+        self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp+1), options.label_mlp+1), init = dy.ConstInitializer(0))
 
         def _emb_mask_generator(seq_len, batch_size):
             ret = []
@@ -166,80 +96,50 @@ class MSTParserLSTM:
                 word_mask = np.random.binomial(1, 1. - self.options.dropout, batch_size).astype(np.float32)
                 if self.options.use_pos:
                     tag_mask = np.random.binomial(1, 1. - self.options.dropout, batch_size).astype(np.float32)
-                    scale = 3. / (2. * word_mask + tag_mask + 1e-12) if not self.options.use_char else 5. / (4. * word_mask + tag_mask + 1e-12)
+                    scale = 3. / (2. * word_mask + tag_mask + 1e-12) 
                     word_mask *= scale
                     tag_mask *= scale
-                    word_mask = inputTensor(word_mask, batched=True)
-                    tag_mask = inputTensor(tag_mask, batched=True)
+                    word_mask = dy.inputTensor(word_mask, batched=True)
+                    tag_mask = dy.inputTensor(tag_mask, batched=True)
                     ret.append((word_mask, tag_mask))
                 else:
                     scale = 2. / (2. * word_mask + 1e-12) if not self.options.use_char else 4. / (4. * word_mask + 1e-12)
                     word_mask *= scale
-                    word_mask = inputTensor(word_mask, batched=True)
+                    word_mask = dy.inputTensor(word_mask, batched=True)
                     ret.append(word_mask)
             return ret
 
         self.generate_emb_mask = _emb_mask_generator
 
-    def moving_avg(self, r1, r2):
-        self.a_wlookup = r1 * self.a_wlookup + r2 * self.wlookup.expr().npvalue()
-        self.a_plookup = r1 * self.a_plookup + r2 * self.plookup.expr().npvalue()
-        self.a_arc_mlp_head = r1 * self.a_arc_mlp_head + r2 * self.arc_mlp_head.expr().npvalue()
-        self.a_arc_mlp_head_b = r1 * self.a_arc_mlp_head_b + r2 * self.arc_mlp_head_b.expr().npvalue()
-        self.a_label_mlp_head = r1 * self.a_label_mlp_head + r2 * self.label_mlp_head.expr().npvalue()
-        self.a_label_mlp_head_b = r1 * self.a_label_mlp_head_b + r2 * self.label_mlp_head_b.expr().npvalue()
-        self.a_arc_mlp_dep = r1 * self.a_arc_mlp_dep + r2 * self.arc_mlp_dep.expr().npvalue()
-        self.a_arc_mlp_dep_b = r1 * self.a_arc_mlp_dep_b + r2 * self.arc_mlp_dep_b.expr().npvalue()
-        self.a_label_mlp_dep = r1 * self.a_label_mlp_dep + r2 * self.label_mlp_dep.expr().npvalue()
-        self.a_label_mlp_dep_b = r1 * self.a_label_mlp_dep_b + r2 * self.label_mlp_dep_b.expr().npvalue()
-        self.a_w_arc = r1 * self.a_w_arc + r2 * self.w_arc.expr().npvalue()
-        self.a_u_label = r1 * self.a_u_label + r2 * self.u_label.expr().npvalue()
-
-        for i in range(len(self.deep_lstms.builder_layers)):
-            builder = self.deep_lstms.builder_layers[i]
-            params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
-            for j in range(len(params)):
-                self.a_lstms[i][j] = r1 * self.a_lstms[i][j] + r2 * params[j].expr().npvalue()
-
-        if self.options.use_char:
-            self.a_clookup = r1 * self.a_clookup + r2 * self.clookup.expr().npvalue()
-            for i in range(len(self.char_lstm.builder_layers)):
-                builder = self.char_lstm.builder_layers[i]
-                params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
-                for j in range(len(params)):
-                    self.ac_lstms[i][j] = r1 * self.ac_lstms[i][j] + r2 * params[j].expr().npvalue()
-
-        renew_cg()
-
     def bilinear(self, M, W, H, input_size, seq_len, batch_size, num_outputs=1, bias_x=False, bias_y=False):
         if bias_x:
-            M = concatenate([M, inputTensor(np.ones((1, seq_len), dtype=np.float32))])
+            M = dy. dy.concatenate([M, dy.inputTensor(np.ones((1, seq_len), dtype=np.float32))])
         if bias_y:
-            H = concatenate([H, inputTensor(np.ones((1, seq_len), dtype=np.float32))])
+            H = dy. dy.concatenate([H, dy.inputTensor(np.ones((1, seq_len), dtype=np.float32))])
 
         nx, ny = input_size + bias_x, input_size + bias_y
         lin = W * M
         if num_outputs > 1:
-            lin = reshape(lin, (ny, num_outputs * seq_len), batch_size=batch_size)
-        blin = transpose(H) * lin
+            lin = dy.reshape(lin, (ny, num_outputs * seq_len), batch_size=batch_size)
+        blin =  dy.transpose(H) * lin
         if num_outputs > 1:
-            blin = reshape(blin, (seq_len, num_outputs, seq_len), batch_size=batch_size)
+            blin = dy.reshape(blin, (seq_len, num_outputs, seq_len), batch_size=batch_size)
         return blin
 
     def __evaluate(self, H, M):
-        M2 = concatenate([M, inputTensor(np.ones((1, M.dim()[0][1]), dtype=np.float32))])
-        return transpose(H)*(self.w_arc.expr()*M2)
+        M2 = dy. dy.concatenate([M, dy.inputTensor(np.ones((1, M.dim()[0][1]), dtype=np.float32))])
+        return  dy.transpose(H)*(self.w_arc.expr()*M2)
 
     def __evaluateLabel(self, i, j, HL, ML):
-        H2 = concatenate([HL, inputTensor(np.ones((1, HL.dim()[0][1]), dtype=np.float32))])
-        M2 = concatenate([ML, inputTensor(np.ones((1, ML.dim()[0][1]), dtype=np.float32))])
-        h, m = transpose(H2), transpose(M2)
-        return reshape(transpose(h[i]) * self.u_label.expr(), (len(self.irels), self.options.label_mlp+1)) * m[j]
+        H2 = dy. dy.concatenate([HL, dy.inputTensor(np.ones((1, HL.dim()[0][1]), dtype=np.float32))])
+        M2 = dy. dy.concatenate([ML, dy.inputTensor(np.ones((1, ML.dim()[0][1]), dtype=np.float32))])
+        h, m =  dy.transpose(H2),  dy.transpose(M2)
+        return dy.reshape( dy.transpose(h[i]) * self.u_label.expr(), (len(self.irels), self.options.label_mlp+1)) * m[j]
 
-    def Save(self, filename):
+    def save(self, filename):
         self.model.save(filename)
 
-    def Load(self, filename):
+    def load(self, filename):
         self.model.populate(filename)
 
     def bi_rnn(self, inputs, batch_size=None, dropout_x=0., dropout_h=0.):
@@ -251,7 +151,7 @@ class MSTParserLSTM:
                 fb.set_dropout_masks(batch_size)
                 bb.set_dropout_masks(batch_size)
             fs, bs = f.transduce(inputs), b.transduce(reversed(inputs))
-            inputs = [concatenate([f, b]) for f, b in zip(fs, reversed(bs))]
+            inputs = [ dy.concatenate([f, b]) for f, b in zip(fs, reversed(bs))]
         return inputs
 
 
@@ -259,72 +159,81 @@ class MSTParserLSTM:
         '''
         Here, I assumed all sens have the same length.
         '''
-        words, pwords, pos, chars = sens[0], sens[1], sens[2], sens[5]
-        if self.options.use_char:
-            cembed = [lookup_batch(self.clookup, c) for c in chars]
-            char_fwd, char_bckd = self.char_lstm.builder_layers[0][0].initial_state().transduce(cembed)[-1],\
-                                  self.char_lstm.builder_layers[0][1].initial_state().transduce(reversed(cembed))[-1]
-            crnn = reshape(concatenate_cols([char_fwd, char_bckd]), (self.options.we, words.shape[0]*words.shape[1]))
-            cnn_reps = [list() for _ in range(len(words))]
-            for i in range(len(words)):
-                cnn_reps[i] = pick_batch(crnn, [j*words.shape[0]+i for j in range(words.shape[1])],1)
-            wembed = [lookup_batch(self.wlookup, words[i]) + lookup_batch(self.elookup, pwords[i]) + cnn_reps[i] for i in range(len(words))]
-        else:
-            wembed = [lookup_batch(self.wlookup, words[i]) + lookup_batch(self.elookup, pwords[i]) for i in range(len(words))]
-        posembed = [lookup_batch(self.plookup, pos[i]) for i in range(len(pos))] if self.options.use_pos else None
+        words, pos_tags, chars, langs = sens[0], sens[1], sens[4], sens[5]
+        all_inputs = [0] * len(chars.keys())
+        for l, lang in enumerate(chars.keys()):
+            cembed = [dy.lookup_batch(self.clookup[lang], c) for c in chars[lang]]
+            char_fwd = self.char_lstm[lang].builder_layers[0][0].initial_state().transduce(cembed)[-1]
+            char_bckd = self.char_lstm[lang].builder_layers[0][1].initial_state().transduce(reversed(cembed))[-1]
+            crnns = dy.reshape(dy.concatenate_cols([char_fwd, char_bckd]), (self.options.we, chars[lang].shape[1]))
+            cnn_reps = [list() for _ in range(len(words[lang]))]
+            for i in range(len(words[lang])):
+                cnn_reps[i] = dy.pick_batch(crnns, [j * words[lang].shape[0] + i for j in range(words[lang].shape[1])],
+                                            1)
+            wembed = [dy.lookup_batch(self.elookup, words[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
+            posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in
+                        range(len(pos_tags[lang]))] if self.options.use_pos else None
 
-        if not train:
-            inputs = [concatenate([w, pos]) for w, pos in zip(wembed, posembed)] if self.options.use_pos else wembed
-        else:
-            emb_masks = self.generate_emb_mask(words.shape[0], words.shape[1])
-            inputs = [concatenate([cmult(w, wm), cmult(pos, posm)]) for w, pos, (wm, posm) in zip(wembed, posembed, emb_masks)] if self.options.use_pos\
-                else [cmult(w, wm) for w, wm in zip(wembed, emb_masks)]
+            if not train:
+                inputs = [dy.concatenate([w, pos]) for w, pos in
+                          zip(wembed, posembed)] if self.options.use_pos else wembed
+                inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in inputs]
+            else:
+                emb_masks = self.generate_emb_mask(words[lang].shape[0], words[lang].shape[1])
+                inputs = [dy.concatenate([dy.cmult(w, wm), dy.cmult(pos, posm)]) for w, pos, (wm, posm) in
+                          zip(wembed, posembed, emb_masks)] if self.options.use_pos \
+                    else [dy.cmult(w, wm) for w, wm in zip(wembed, emb_masks)]
+                inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in inputs]
+            all_inputs[l] = inputs
 
+        lstm_input = [dy.concatenate_to_batch([all_inputs[j][i] for j in range(len(all_inputs))]) for i in
+                      range(len(all_inputs[0]))]
         d = self.options.dropout
-        h_out = self.bi_rnn(inputs, words.shape[1], d if train else 0, d if train else 0) #self.deep_lstms.transduce(inputs)
-        h = dropout_dim(concatenate_cols(h_out), 1, d) if train else concatenate_cols(h_out)
-        H = self.activation(affine_transform([self.arc_mlp_head_b.expr(), self.arc_mlp_head.expr(), h]))
-        M = self.activation(affine_transform([self.arc_mlp_dep_b.expr(), self.arc_mlp_dep.expr(), h]))
-        HL = self.activation(affine_transform([self.label_mlp_head_b.expr(), self.label_mlp_head.expr(), h]))
-        ML = self.activation(affine_transform([self.label_mlp_dep_b.expr(), self.label_mlp_dep.expr(), h]))
+        h_out = self.bi_rnn(lstm_input, lstm_input[0].dim()[1], d if train else 0, d if train else 0)
+
+        h =  dy.dropout_dim( dy.concatenate_cols(h_out), 1, d) if train else dy. dy.concatenate_cols(h_out)
+        H = self.activation( dy.affine_transform([self.arc_mlp_head_b.expr(), self.arc_mlp_head.expr(), h]))
+        M = self.activation( dy.affine_transform([self.arc_mlp_dep_b.expr(), self.arc_mlp_dep.expr(), h]))
+        HL = self.activation( dy.affine_transform([self.label_mlp_head_b.expr(), self.label_mlp_head.expr(), h]))
+        ML = self.activation( dy.affine_transform([self.label_mlp_dep_b.expr(), self.label_mlp_dep.expr(), h]))
 
         if train:
-            H, M, HL, ML = dropout_dim(H, 1, d), dropout_dim(M, 1, d), dropout_dim(HL, 1, d), dropout_dim(ML, 1, d)
+            H, M, HL, ML =  dy.dropout_dim(H, 1, d),  dy.dropout_dim(M, 1, d),  dy.dropout_dim(HL, 1, d),  dy.dropout_dim(ML, 1, d)
         return H, M, HL, ML
 
     def build_graph(self, mini_batch, t=1, train=True):
         H, M, HL, ML = self.rnn_mlp(mini_batch, train)
         arc_scores = self.bilinear(M, self.w_arc.expr(), H, self.options.arc_mlp, mini_batch[0].shape[0], mini_batch[0].shape[1],1, True, False)
         rel_scores = self.bilinear(ML, self.u_label.expr(), HL, self.options.label_mlp, mini_batch[0].shape[0], mini_batch[0].shape[1], len(self.irels), True, True)
-        flat_scores = reshape(arc_scores, (mini_batch[0].shape[0],), mini_batch[0].shape[0]* mini_batch[0].shape[1])
-        flat_rel_scores = reshape(rel_scores, (mini_batch[0].shape[0], len(self.irels)), mini_batch[0].shape[0]* mini_batch[0].shape[1])
+        flat_scores = dy.reshape(arc_scores, (mini_batch[0].shape[0],), mini_batch[0].shape[0]* mini_batch[0].shape[1])
+        flat_rel_scores = dy.reshape(rel_scores, (mini_batch[0].shape[0], len(self.irels)), mini_batch[0].shape[0]* mini_batch[0].shape[1])
         masks = np.reshape(mini_batch[-1], (-1,), 'F')
-        mask_1D_tensor = inputTensor(masks, batched=True)
+        mask_1D_tensor = dy.inputTensor(masks, batched=True)
         n_tokens = np.sum(masks)
         if train:
             heads = np.reshape(mini_batch[3], (-1,), 'F')
-            partial_rel_scores = pick_batch(flat_rel_scores, heads)
+            partial_rel_scores =  dy.pick_batch(flat_rel_scores, heads)
             gold_relations = np.reshape(mini_batch[4], (-1,), 'F')
-            arc_losses = pickneglogsoftmax_batch(flat_scores, heads)
-            arc_loss = sum_batches(arc_losses*mask_1D_tensor)/n_tokens
-            rel_losses = pickneglogsoftmax_batch(partial_rel_scores, gold_relations)
-            rel_loss = sum_batches(rel_losses*mask_1D_tensor)/n_tokens
+            arc_losses =  dy.pickneglogsoftmax_batch(flat_scores, heads)
+            arc_loss = dy.sum_batches(arc_losses*mask_1D_tensor)/n_tokens
+            rel_losses =  dy.pickneglogsoftmax_batch(partial_rel_scores, gold_relations)
+            rel_loss = dy.sum_batches(rel_losses*mask_1D_tensor)/n_tokens
             err = 0.5 * (arc_loss + rel_loss)
             err.scalar_value()
             loss = err.value()
             err.backward()
             self.trainer.update()
-            renew_cg()
-            ratio = min(0.9999, float(t) / (9 + t))
-            self.moving_avg(ratio, 1 - ratio)
+            dy.renew_cg()
+            # ratio = min(0.9999, float(t) / (9 + t))
+            # self.moving_avg(ratio, 1 - ratio)
             return t + 1, loss
         else:
-            arc_probs = np.transpose(np.reshape(softmax(flat_scores).npvalue(), (mini_batch[0].shape[0],  mini_batch[0].shape[0],  mini_batch[0].shape[1]), 'F'))
-            rel_probs = np.transpose(np.reshape(softmax(transpose(flat_rel_scores)).npvalue(),
+            arc_probs = np. dy.transpose(np.reshape(dy.softmax(flat_scores).npvalue(), (mini_batch[0].shape[0],  mini_batch[0].shape[0],  mini_batch[0].shape[1]), 'F'))
+            rel_probs = np. dy.transpose(np.reshape(dy.softmax( dy.transpose(flat_rel_scores)).npvalue(),
                                                 (len(self.irels), mini_batch[0].shape[0], mini_batch[0].shape[0], mini_batch[0].shape[1]), 'F'))
             outputs = []
 
-            for msk, arc_prob, rel_prob in zip(np.transpose(mini_batch[-1]), arc_probs, rel_probs):
+            for msk, arc_prob, rel_prob in zip(np. dy.transpose(mini_batch[-1]), arc_probs, rel_probs):
                 # parse sentences one by one
                 msk[0] = 1.
                 sent_len = int(np.sum(msk))
@@ -332,5 +241,5 @@ class MSTParserLSTM:
                 rel_prob = rel_prob[np.arange(len(arc_pred)), arc_pred]
                 rel_pred = decoder.rel_argmax(rel_prob, sent_len, self.PAD_REL, self.root_id)
                 outputs.append((arc_pred[1:sent_len], rel_pred[1:sent_len]))
-            renew_cg()
+            dy.renew_cg()
             return outputs

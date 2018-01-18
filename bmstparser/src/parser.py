@@ -1,6 +1,5 @@
 from optparse import OptionParser
 import pickle, utils, mstlstm, sys, os.path, time
-import shared_rnn_model
 
 def test(parser, buckets, test_file, output_file):
     results = list()
@@ -48,7 +47,7 @@ if __name__ == '__main__':
     parser.add_option("--beta2", type="float", dest="beta2", default=0.9)
     parser.add_option("--dropout", type="float", dest="dropout", default=0.33)
     parser.add_option("--outdir", type="string", dest="output", default="results")
-    parser.add_option("--netdir", metavar="FILE", dest="netdir", default=None)
+    parser.add_option("--net", metavar="FILE", dest="netfile", default=None)
     parser.add_option("--activation", type="string", dest="activation", default="leaky")
     parser.add_option("--layer", type="int", dest="layer", default=3)
     parser.add_option("--rnn", type="int", dest="rnn", help='dimension of rnn in each direction', default=200)
@@ -84,12 +83,11 @@ if __name__ == '__main__':
         print 'Finished predicting test.', te-ts, 'seconds.'
     else:
         print 'reading shared model'
-        with open(options.netdir+'/params.pickle', 'r') as paramsfp:
-            chars, net_options = pickle.load(paramsfp)
+        with open(options.netfile, 'r') as paramsfp:
+            chars, net_options, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params = pickle.load(paramsfp)
+
         universal_tags = ['ADJ', 'ADP', 'ADV', 'AUX', 'CCONJ', 'DET', 'INTJ', 'NOUN', 'NUM', 'PART', 'PRON', 'PROPN',
                           'PUNCT', 'SCONJ', 'SYM', 'VERB', 'X']
-        sharedRNN_network = shared_rnn_model.Network(universal_tags, chars, net_options)
-        sharedRNN_network.load(options.netdir+'/model')
 
         print 'Preparing vocab'
         rels = utils.vocab(options.conll_train)
@@ -99,7 +97,7 @@ if __name__ == '__main__':
         print 'Finished collecting vocab'
 
         print 'Initializing lstm mstparser:'
-        parser = mstlstm.MSTParserLSTM(universal_tags, rels, chars, options, sharedRNN_network)
+        parser = mstlstm.MSTParserLSTM(universal_tags, rels, options, chars, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params)
         best_acc = -float('inf')
         t, epoch = 0,1
         train_data = list(utils.read_conll(open(options.conll_train, 'r')))

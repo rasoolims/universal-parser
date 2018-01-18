@@ -7,7 +7,7 @@ import codecs, os, sys
 from linalg import *
 
 class MSTParserLSTM:
-    def __init__(self, pos, rels, chars, options, shared_rnn_model):
+    def __init__(self, pos, rels, options, chars, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params):
         self.model = dy.Model()
         self.PAD = 1
         self.options = options
@@ -45,17 +45,17 @@ class MSTParserLSTM:
 
             print 'Loaded vector', edim, 'and', len(external_embedding[lang]), 'for', lang
 
-            self.clookup[lang] = self.model.add_lookup_parameters((len(chars[lang]) + 2, options.ce), init=dy.NumpyInitializer(shared_rnn_model.clookup[lang].expr().npvalue()))
+            self.clookup[lang] = self.model.add_lookup_parameters((len(chars[lang]) + 2, options.ce), init=dy.NumpyInitializer(clookup_params[lang]))
 
             self.char_lstm[lang] = dy.BiRNNBuilder(1, options.ce, edim, self.model, dy.VanillaLSTMBuilder)
             for i in range(len(self.char_lstm[lang].builder_layers)):
                 builder = self.char_lstm[lang].builder_layers[i]
                 params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
                 for j in range(len(params)):
-                    params[j].set_value(shared_rnn_model.char_lstm[lang].builder_layers[i][j].expr().npvalue())
+                    params[j].set_value(char_lstm_params[lang][i][j])
             self.char_lstm[lang].set_updated(False)
 
-            self.proj_mat[lang] = self.model.add_parameters((edim + options.pe, edim + options.pe), init=dy.NumpyInitializer(shared_rnn_model.proj_mat[lang].expr().npvalue()))
+            self.proj_mat[lang] = self.model.add_parameters((edim + options.pe, edim + options.pe), init=dy.NumpyInitializer(proj_mat_params[lang]))
             self.proj_mat[lang].set_updated(False)
 
         self.elookup = self.model.add_lookup_parameters((word_index, edim))
@@ -74,7 +74,7 @@ class MSTParserLSTM:
             builder = self.deep_lstms.builder_layers[i]
             params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
             for j in range(len(params)):
-                params[j].set_value(shared_rnn_model.deep_lstms.builder_layers[i][j].expr().npvalue())
+                params[j].set_value(deep_lstm_params[i][j])
         self.deep_lstms.set_updated(False)
 
         w_mlp_arc = orthonormal_initializer(options.arc_mlp, options.rnn * 2)

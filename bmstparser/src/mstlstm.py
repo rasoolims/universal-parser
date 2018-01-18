@@ -232,12 +232,12 @@ class MSTParserLSTM:
             # self.moving_avg(ratio, 1 - ratio)
             return t + 1, loss
         else:
-            arc_probs = np. dy.transpose(np.reshape(dy.softmax(flat_scores).npvalue(), (shape_0,  shape_0,  shape_1), 'F'))
-            rel_probs = np. dy.transpose(np.reshape(dy.softmax( dy.transpose(flat_rel_scores)).npvalue(),
+            arc_probs = np.transpose(np.reshape(dy.softmax(flat_scores).npvalue(), (shape_0,  shape_0,  shape_1), 'F'))
+            rel_probs = np.transpose(np.reshape(dy.softmax( dy.transpose(flat_rel_scores)).npvalue(),
                                                 (len(self.irels), shape_0, shape_0, shape_1), 'F'))
             outputs = []
 
-            for msk, arc_prob, rel_prob in zip(np. dy.transpose(mini_batch[-1]), arc_probs, rel_probs):
+            for msk, arc_prob, rel_prob in zip(np.transpose(mini_batch[-1]), arc_probs, rel_probs):
                 # parse sentences one by one
                 msk[0] = 1.
                 sent_len = int(np.sum(msk))

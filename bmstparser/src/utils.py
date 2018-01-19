@@ -138,7 +138,7 @@ def add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model):
         offset = 0
         for w_pos in range(cur_len):
             for sen_position in range(len(batch)):
-                if 0 < w_pos < len(batch[sen_position]) and c_pos < len(batch[sen_position][w_pos].norm):
+                if w_pos < len(batch[sen_position]) and c_pos < len(batch[sen_position][w_pos].norm):
                     ch[offset] = model.chars.get(batch[sen_position][w_pos].norm[c_pos], 0)
                 offset += 1
         chars[c_pos] = np.array(ch)

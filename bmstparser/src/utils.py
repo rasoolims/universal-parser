@@ -125,7 +125,7 @@ def get_minibatch(batch, max_c_len, cur_len, model):
     for lang_id in batch.keys():
         chars_ = [list() for _ in range(max_c_len)]
         for c_pos in range(max_c_len):
-            ch = [model.PAD] * (len(batch) * cur_len)
+            ch = [model.PAD] * (len(batch[lang_id]) * cur_len)
             offset = 0
             for w_pos in range(cur_len):
                 for sen_position in range(len(batch[lang_id])):

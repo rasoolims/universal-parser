@@ -133,7 +133,7 @@ def add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model):
         [model.rels.get(batch[i][j].relation, 0) if j < len(batch[i]) else model.PAD_REL for i in
          range(len(batch))]) for j in range(cur_len)])
     chars = [list() for _ in range(cur_c_len)]
-    for c_pos in range(cur_len):
+    for c_pos in range(cur_c_len):
         ch = [model.PAD] * (len(batch) * cur_len)
         offset = 0
         for w_pos in range(cur_len):

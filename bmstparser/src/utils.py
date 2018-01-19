@@ -82,11 +82,11 @@ def eval(gold, predicted):
     return 100 * float(correct_deps) / all_deps, 100 * float(correct_l) / all_deps
 
 
-numberRegex = re.compile("[0-9]+|[0-9]+\\.[0-9]+|[0-9]+[0-9,]+");
-
+numberRegex = re.compile("[0-9]+|[0-9]+\\.[0-9]+|[0-9]+[0-9,]+")
+urlRegex = re.compile("((https?):((//)|(\\\\))+([\w\d:#@%/;$()~_?\+-=\\\.&](#!)?)*)")
 
 def normalize(word):
-    return 'NUM' if numberRegex.match(word) else word.lower()
+    return '<num>' if numberRegex.match(word) else ('<url>' if urlRegex.match(word) else word.lower())
 
 
 def get_batches(buckets, model, is_train):
@@ -100,7 +100,7 @@ def get_batches(buckets, model, is_train):
         for d in dc:
             if (is_train and len(d) <= 100) or not is_train:
                 batch[d[1].lang_id].append(d)
-                cur_c_len = max(cur_c_len, max([len(w.form) for w in d]))
+                cur_c_len = max(cur_c_len, max([len(w.norm) for w in d]))
                 cur_len = max(cur_len, len(d))
                 batch_len += 1
 
@@ -123,13 +123,17 @@ def get_minibatch(batch, max_c_len, cur_len, model):
     chars, pwords, pos = dict(), dict(), dict()
     num_words = 0
     for lang_id in batch.keys():
-        chars[lang_id] = np.array([[[model.chars[lang_id].get(batch[lang_id][i][j].form[c].lower(), 0)
-                                     if 0 < j < len(batch[lang_id][i]) and c < len(batch[lang_id][i][j].form)
-                                     else (1 if j == 0 and c == 0 else 0)
-                                     for i in range(len(batch[lang_id]))]
-                                     for j in range(cur_len)]
-                                     for c in range(max_c_len)])
-        chars[lang_id] = np.transpose(np.reshape(chars[lang_id], (len(batch[lang_id]) * cur_len, max_c_len)))
+        chars_ = [list() for _ in range(max_c_len)]
+        for c_pos in range(max_c_len):
+            ch = [model.PAD] * (len(batch) * cur_len)
+            offset = 0
+            for w_pos in range(cur_len):
+                for sen_position in range(len(batch[lang_id])):
+                    if w_pos < len(batch[lang_id][sen_position]) and c_pos < len(batch[lang_id][sen_position][w_pos].norm):
+                        ch[offset] = model.chars.get(batch[lang_id][sen_position][w_pos].norm[c_pos], 0)
+                    offset += 1
+            chars_[c_pos] = np.array(ch)
+        chars[lang_id] = np.array(chars_)
         pwords[lang_id] = np.array([np.array(
             [model.evocab[langs[i]].get(batch[lang_id][i][j].form, 0) if j < len(batch[lang_id][i]) else model.PAD for
              i in

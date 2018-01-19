@@ -47,11 +47,15 @@ class MSTParserLSTM:
             efp = gzip.open(options.external_embedding + '/' + f, 'r')
             external_embedding[lang] =  dict()
             for line in efp:
-                spl = line.split(' ')
+                spl = line.strip().split(' ')
                 if len(spl) > 2:
                     w = spl[0]
                     if (not words) or (w in words):
-                        external_embedding[lang][w] = [float(f) for f in spl[1:]]
+                        try:
+                            external_embedding[lang][w] = [float(f) for f in spl[1:]]
+                        except:
+                            print spl
+                            external_embedding[lang][w] = [float(f) for f in spl[1:]]
             efp.close()
 
             self.evocab[lang] = {word: i + word_index for i, word in enumerate(external_embedding[lang])}

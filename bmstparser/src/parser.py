@@ -57,6 +57,7 @@ if __name__ == '__main__':
     parser.add_option("--no_char", action="store_false", dest="use_char", default=True)
     parser.add_option("--no_pos", action="store_false", dest="use_pos", default=True)
     parser.add_option("--stop", type="int", dest="stop", default=50)
+    parser.add_option("--tune_net", action="store_true", dest="tune_net", default=False)
     parser.add_option("--dynet-mem", type="int", dest="mem", default=0)
     parser.add_option("--dynet-autobatch", type="int", dest="dynet-autobatch", default=0)
 

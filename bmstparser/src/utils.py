@@ -37,7 +37,7 @@ def vocab(conll_path, min_count=2):
             posCount.update([node.pos for node in sentence if isinstance(node, ConllEntry)])
             relCount.update([node.relation for node in sentence if isinstance(node, ConllEntry)])
             for node in sentence:
-                for c in list(node.form):
+                for c in list(node.norm):
                     chars.add(c.lower())
 
     words = set()
@@ -84,9 +84,11 @@ def eval(gold, predicted):
                         correct_l+=1
     return 100 * float(correct_deps) / all_deps, 100 * float(correct_l) / all_deps
 
-numberRegex = re.compile("[0-9]+|[0-9]+\\.[0-9]+|[0-9]+[0-9,]+");
+numberRegex = re.compile("[0-9]+|[0-9]+\\.[0-9]+|[0-9]+[0-9,]+")
+urlRegex = re.compile("((https?):((//)|(\\\\))+([\w\d:#@%/;$()~_?\+-=\\\.&](#!)?)*)")
+
 def normalize(word):
-    return 'NUM' if numberRegex.match(word) else word.lower()
+    return 'NUM' if numberRegex.match(word) else ('<url>' if urlRegex.match(word) else word.lower())
 
 def get_batches(buckets, model, is_train):
     d_copy = [buckets[i][:] for i in range(len(buckets))]
@@ -99,7 +101,7 @@ def get_batches(buckets, model, is_train):
         for d in dc:
             if (is_train and len(d)<=100) or not is_train:
                 batch.append(d)
-                cur_c_len = max(cur_c_len, max([len(w.form) for w in d]))
+                cur_c_len = max(cur_c_len, max([len(w.norm) for w in d]))
                 cur_len = max(cur_len, len(d))
 
             if cur_len * len(batch) >= model.options.batch:
@@ -137,7 +139,7 @@ def add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model):
         for w_pos in range(cur_len):
             for sen_position in range(len(batch)):
                 if 0 < w_pos < len(batch[sen_position]) and c_pos < len(batch[sen_position][w_pos].norm):
-                    ch[offset] = model.char_dict.get(batch[sen_position][w_pos].norm[c_pos], model.unk_id)
+                    ch[offset] = model.chars.get(batch[sen_position][w_pos].norm[c_pos], 0)
                 offset += 1
         chars[c_pos] = np.array(ch)
     chars = np.array(chars)

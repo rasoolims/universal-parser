@@ -22,7 +22,12 @@ class MSTParserLSTM:
         self.irels = ['PAD'] + rels
         self.PAD_REL = 0
         edim = net_options.we
-
+        words = None
+        if options.words_file:
+            words = set()
+            for line in codecs.open(options.words_file, 'r'):
+                for w in line.strip().split():
+                    words.add(w)
         if not options.no_init:
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, net_options.pe), init = dy.NumpyInitializer(plookup_params))
         else:
@@ -40,9 +45,15 @@ class MSTParserLSTM:
         for f in os.listdir(options.external_embedding):
             lang = f[:-3]
             efp = gzip.open(options.external_embedding + '/' + f, 'r')
-            external_embedding[lang] = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]]
-                                        for line in efp if len(line.split(' ')) > 2}
+            external_embedding[lang] =  dict()
+            for line in efp:
+                spl = line.split(' ')
+                if len(spl) > 2:
+                    w = spl[0]
+                    if (not words) or (w in words):
+                        external_embedding[lang][w] = [float(f) for f in spl[1:]]
             efp.close()
+
             self.evocab[lang] = {word: i + word_index for i, word in enumerate(external_embedding[lang])}
             word_index += len(self.evocab[lang])
 

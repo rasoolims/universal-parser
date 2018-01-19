@@ -23,7 +23,11 @@ class MSTParserLSTM:
         self.PAD_REL = 0
         edim = net_options.we
 
-        self.plookup = self.model.add_lookup_parameters((len(pos) + 2, net_options.pe), init = dy.NumpyInitializer(plookup_params))
+        if not options.no_init:
+            self.plookup = self.model.add_lookup_parameters((len(pos) + 2, net_options.pe), init = dy.NumpyInitializer(plookup_params))
+        else:
+            self.plookup = self.model.add_lookup_parameters((len(pos) + 2, net_options.pe))
+
         if not options.tune_net:
             self.plookup.set_updated(False)
         self.chars = dict()
@@ -48,18 +52,27 @@ class MSTParserLSTM:
 
             print 'Loaded vector', edim, 'and', len(external_embedding[lang]), 'for', lang
 
-            self.clookup[lang] = self.model.add_lookup_parameters((len(chars[lang]) + 2, net_options.ce), init=dy.NumpyInitializer(clookup_params[lang]))
+            if not options.no_init:
+                self.clookup[lang] = self.model.add_lookup_parameters((len(chars[lang]) + 2, net_options.ce), init=dy.NumpyInitializer(clookup_params[lang]))
+            else:
+                self.clookup[lang] = self.model.add_lookup_parameters((len(chars[lang]) + 2, net_options.ce))
+
             if not options.tune_net: self.clookup[lang].set_updated(False)
 
             self.char_lstm[lang] = dy.BiRNNBuilder(1, net_options.ce, edim, self.model, dy.VanillaLSTMBuilder)
-            for i in range(len(self.char_lstm[lang].builder_layers)):
-                builder = self.char_lstm[lang].builder_layers[i]
-                params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
-                for j in range(len(params)):
-                    params[j].set_value(char_lstm_params[lang][i][j])
-                    if not options.tune_net: params[j].set_updated(False)
+            if not options.no_init:
+                for i in range(len(self.char_lstm[lang].builder_layers)):
+                    builder = self.char_lstm[lang].builder_layers[i]
+                    params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
+                    for j in range(len(params)):
+                        params[j].set_value(char_lstm_params[lang][i][j])
+                        if not options.tune_net: params[j].set_updated(False)
 
-            self.proj_mat[lang] = self.model.add_parameters((edim + net_options.pe, edim + net_options.pe), init=dy.NumpyInitializer(proj_mat_params[lang]))
+            if not options.no_init:
+                self.proj_mat[lang] = self.model.add_parameters((edim + net_options.pe, edim + net_options.pe), init=dy.NumpyInitializer(proj_mat_params[lang]))
+            else:
+                self.proj_mat[lang] = self.model.add_parameters((edim + net_options.pe, edim + net_options.pe))
+
             if not options.tune_net: self.proj_mat[lang].set_updated(False)
 
         self.elookup = self.model.add_lookup_parameters((word_index, edim))
@@ -74,12 +87,13 @@ class MSTParserLSTM:
         input_dim = edim + net_options.pe if self.options.use_pos else edim
 
         self.deep_lstms = dy.BiRNNBuilder(net_options.layer, input_dim, net_options.rnn * 2, self.model, dy.VanillaLSTMBuilder)
-        for i in range(len(self.deep_lstms.builder_layers)):
-            builder = self.deep_lstms.builder_layers[i]
-            params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
-            for j in range(len(params)):
-                params[j].set_value(deep_lstm_params[i][j])
-                if not options.tune_net: params[j].set_updated(False)
+        if not options.no_init:
+            for i in range(len(self.deep_lstms.builder_layers)):
+                builder = self.deep_lstms.builder_layers[i]
+                params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
+                for j in range(len(params)):
+                    params[j].set_value(deep_lstm_params[i][j])
+                    if not options.tune_net: params[j].set_updated(False)
 
         w_mlp_arc = orthonormal_initializer(options.arc_mlp, options.rnn * 2)
         w_mlp_label = orthonormal_initializer(options.label_mlp, options.rnn * 2)

@@ -266,8 +266,9 @@ class MSTParserLSTM:
                                   self.char_lstm.builder_layers[0][1].initial_state().transduce(reversed(cembed))[-1]
             crnn = reshape(concatenate_cols([char_fwd, char_bckd]), (self.options.we, words.shape[0]*words.shape[1]))
             cnn_reps = [list() for _ in range(len(words))]
-            for i in range(len(words)):
-                cnn_reps[i] = pick_batch(crnn, [j*words.shape[0]+i for j in range(words.shape[1])],1)
+            for i in range(words.shape[0]):
+                cnn_reps[i] = pick_batch(crnn, [i * words.shape[1] + j for j in range(words.shape[1])], 1)
+
             wembed = [lookup_batch(self.wlookup, words[i]) + lookup_batch(self.elookup, pwords[i]) + cnn_reps[i] for i in range(len(words))]
         else:
             wembed = [lookup_batch(self.wlookup, words[i]) + lookup_batch(self.elookup, pwords[i]) for i in range(len(words))]

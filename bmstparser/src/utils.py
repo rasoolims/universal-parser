@@ -130,10 +130,17 @@ def add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model):
     relations = np.array([np.array(
         [model.rels.get(batch[i][j].relation, 0) if j < len(batch[i]) else model.PAD_REL for i in
          range(len(batch))]) for j in range(cur_len)])
-    chars = np.array([[[model.chars.get(batch[i][j].form[c].lower(), 0) if 0 < j < len(batch[i]) and c < len(
-        batch[i][j].form) else (1 if j == 0 and c == 0 else 0) for i in range(len(batch))] for j in range(cur_len)] for
-                      c in range(cur_c_len)])
-    chars = np.transpose(np.reshape(chars, (len(batch) * cur_len, cur_c_len)))
+    chars = [list() for _ in range(cur_c_len)]
+    for c_pos in range(cur_len):
+        ch = [model.PAD] * (len(batch) * cur_len)
+        offset = 0
+        for w_pos in range(cur_len):
+            for sen_position in range(len(batch)):
+                if 0 < w_pos < len(batch[sen_position]) and c_pos < len(batch[sen_position][w_pos].norm):
+                    ch[offset] = model.char_dict.get(batch[sen_position][w_pos].norm[c_pos], model.unk_id)
+                offset += 1
+        chars[c_pos] = np.array(ch)
+    chars = np.array(chars)
     masks = np.array([np.array([1 if 0 < j < len(batch[i]) and batch[i][j].head>=0 else 0 for i in range(len(batch))]) for j in
                       range(cur_len)])
     mini_batches.append((words, pwords, pos, heads, relations, chars, masks))

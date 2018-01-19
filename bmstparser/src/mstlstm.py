@@ -51,11 +51,7 @@ class MSTParserLSTM:
                 if len(spl) > 2:
                     w = spl[0]
                     if (not words) or (w in words):
-                        try:
-                            external_embedding[lang][w] = [float(f) for f in spl[1:]]
-                        except:
-                            print spl
-                            external_embedding[lang][w] = [float(f) for f in spl[1:]]
+                        external_embedding[lang][w] = [float(f) for f in spl[1:]]
             efp.close()
 
             self.evocab[lang] = {word: i + word_index for i, word in enumerate(external_embedding[lang])}

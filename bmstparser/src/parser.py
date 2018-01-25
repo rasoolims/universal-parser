@@ -5,6 +5,7 @@ import pickle, utils, mstlstm, sys, os.path, time
 def test(parser, buckets, test_file, output_file):
     results = list()
     for mini_batch in utils.get_batches(buckets, parser, False):
+        print minibatch[0].shape
         outputs = parser.build_graph(mini_batch, 1, False)
         for output in outputs:
             results.append(output)
@@ -111,7 +112,6 @@ if __name__ == '__main__':
             mini_batches = utils.get_batches(buckets, parser, True)
             start, closs = time.time(), 0
             for i, minibatch in enumerate(mini_batches):
-                print minibatch[0].shape
                 t, loss = parser.build_graph(minibatch, t, True)
                 if parser.options.anneal:
                     decay_steps = min(1.0, float(t) / 50000)

@@ -112,6 +112,7 @@ def arc_argmax(parse_probs, length, tokens_to_keep, ensure_tree=True):
         I = np.eye(len(tokens_to_keep))
         # block loops and pad heads
         parse_probs = parse_probs * tokens_to_keep * (1 - I)
+        print parse_probs.shape
         parse_preds = np.argmax(parse_probs, axis=1)
         tokens = np.arange(1, length)
         roots = np.where(parse_preds[tokens] == 0)[0] + 1

@@ -324,7 +324,7 @@ class MSTParserLSTM:
             rel_probs = np.transpose(np.reshape(softmax(transpose(flat_rel_scores)).npvalue(),
                                                 (len(self.irels), mini_batch[0].shape[0], mini_batch[0].shape[0], mini_batch[0].shape[1]), 'F'))
             outputs = []
-
+            print arc_probs.shape
             for msk, arc_prob, rel_prob in zip(np.transpose(mini_batch[-1]), arc_probs, rel_probs):
                 # parse sentences one by one
                 msk[0] = 1.

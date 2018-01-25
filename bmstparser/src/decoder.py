@@ -120,10 +120,13 @@ def arc_argmax(parse_probs, length, tokens_to_keep, ensure_tree=True):
         if len(roots) < 1:
             # The current root probabilities
             root_probs = parse_probs[tokens, 0]
+            print 'root_probs', root_probs.shape
             # The current head probabilities
             old_head_probs = parse_probs[tokens, parse_preds[tokens]]
+            print 'old_head_probs', old_head_probs.shape
             # Get new potential root probabilities
             new_root_probs = root_probs / old_head_probs
+            print 'new_root_probs', new_root_probs.shape
             # Select the most probable root
             new_root = tokens[np.argmax(new_root_probs)]
             # Make the change

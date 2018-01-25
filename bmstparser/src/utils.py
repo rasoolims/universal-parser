@@ -105,18 +105,18 @@ def get_batches(buckets, model, is_train):
                 cur_len = max(cur_len, len(d))
 
             if cur_len * len(batch) >= model.options.batch:
-                add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model)
+                add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model, is_train)
                 batch, cur_len, cur_c_len = [], 0, 0
 
     if len(batch)>0:
-        add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model)
+        add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model, is_train)
         batch, cur_len = [], 0
     if is_train:
         random.shuffle(mini_batches)
     return mini_batches
 
 
-def add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model):
+def add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model, is_train):
     words = np.array([np.array(
         [model.vocab.get(batch[i][j].norm, 0) if j < len(batch[i]) else model.PAD for i in
          range(len(batch))]) for j in range(cur_len)])
@@ -143,7 +143,7 @@ def add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model):
                 offset += 1
         chars[c_pos] = np.array(ch)
     chars = np.array(chars)
-    masks = np.array([np.array([1 if 0 < j < len(batch[i]) and batch[i][j].head>=0 else 0 for i in range(len(batch))]) for j in
+    masks = np.array([np.array([1 if 0 < j < len(batch[i]) and (batch[i][j].head>=0 or not is_train) else 0 for i in range(len(batch))]) for j in
                       range(cur_len)])
     mini_batches.append((words, pwords, pos, heads, relations, chars, masks))
 

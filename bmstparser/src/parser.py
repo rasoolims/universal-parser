@@ -5,7 +5,7 @@ import pickle, utils, mstlstm, sys, os.path, time
 def test(parser, buckets, test_file, output_file):
     results = list()
     for mini_batch in utils.get_batches(buckets, parser, False):
-        print minibatch[0].shape
+        print mini_batch[0].shape
         outputs = parser.build_graph(mini_batch, 1, False)
         for output in outputs:
             results.append(output)

@@ -111,6 +111,7 @@ if __name__ == '__main__':
             mini_batches = utils.get_batches(buckets, parser, True)
             start, closs = time.time(), 0
             for i, minibatch in enumerate(mini_batches):
+                print minibatch[0].shape
                 t, loss = parser.build_graph(minibatch, t, True)
                 if parser.options.anneal:
                     decay_steps = min(1.0, float(t) / 50000)

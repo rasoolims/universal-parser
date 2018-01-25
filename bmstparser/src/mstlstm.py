@@ -329,6 +329,7 @@ class MSTParserLSTM:
                 # parse sentences one by one
                 msk[0] = 1.
                 sent_len = int(np.sum(msk))
+                print 'sent_len', sent_len
                 arc_pred = decoder.arc_argmax(arc_prob, sent_len, msk)
                 rel_prob = rel_prob[np.arange(len(arc_pred)), arc_pred]
                 rel_pred = decoder.rel_argmax(rel_prob, sent_len, self.PAD_REL, self.root_id)

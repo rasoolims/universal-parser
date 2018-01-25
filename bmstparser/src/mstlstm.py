@@ -324,12 +324,11 @@ class MSTParserLSTM:
             rel_probs = np.transpose(np.reshape(softmax(transpose(flat_rel_scores)).npvalue(),
                                                 (len(self.irels), mini_batch[0].shape[0], mini_batch[0].shape[0], mini_batch[0].shape[1]), 'F'))
             outputs = []
-            print arc_probs.shape
+
             for msk, arc_prob, rel_prob in zip(np.transpose(mini_batch[-1]), arc_probs, rel_probs):
                 # parse sentences one by one
                 msk[0] = 1.
                 sent_len = int(np.sum(msk))
-                print 'sent_len', sent_len
                 arc_pred = decoder.arc_argmax(arc_prob, sent_len, msk)
                 rel_prob = rel_prob[np.arange(len(arc_pred)), arc_pred]
                 rel_pred = decoder.rel_argmax(rel_prob, sent_len, self.PAD_REL, self.root_id)

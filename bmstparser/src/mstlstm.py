@@ -7,7 +7,7 @@ import codecs, os, sys
 from linalg import *
 
 class MSTParserLSTM:
-    def __init__(self, pos, rels, options, chars, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params, net_options):
+    def __init__(self, pos, rels, options, chars, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params, lang_lookup_params, net_options):
         self.model = dy.Model()
         self.PAD = 1
         self.options = options
@@ -95,9 +95,12 @@ class MSTParserLSTM:
             for word in external_embedding[lang].keys():
                 self.elookup.init_row(self.evocab[lang][word], external_embedding[lang][word])
 
+        self.lang2id = {lang: i for i, lang in enumerate(self.evocab.keys())}
+        self.lang_lookup = self.model.add_lookup_parameters((len(self.lang2id), options.le), init=dy.NumpyInitializer(lang_lookup_params))
+
         input_dim = edim + net_options.pe if self.options.use_pos else edim
 
-        self.deep_lstms = dy.BiRNNBuilder(net_options.layer, input_dim, net_options.rnn * 2, self.model, dy.VanillaLSTMBuilder)
+        self.deep_lstms = dy.BiRNNBuilder(net_options.layer, input_dim +  net_options.le, net_options.rnn * 2, self.model, dy.VanillaLSTMBuilder)
         if not options.no_init:
             for i in range(len(self.deep_lstms.builder_layers)):
                 builder = self.deep_lstms.builder_layers[i]
@@ -201,6 +204,7 @@ class MSTParserLSTM:
             wembed = [dy.lookup_batch(self.elookup, words[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
             posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in
                         range(len(pos_tags[lang]))] if self.options.use_pos else None
+            lang_embeds = [dy.lookup_batch(self.lang_lookup, [self.lang2id[lang]]*len(pos_tags[lang][i])) for i in range(len(pos_tags[lang]))]
 
             if not train:
                 inputs = [dy.concatenate([w, pos]) for w, pos in
@@ -212,6 +216,7 @@ class MSTParserLSTM:
                           zip(wembed, posembed, emb_masks)] if self.options.use_pos \
                     else [dy.cmult(w, wm) for w, wm in zip(wembed, emb_masks)]
                 inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in inputs]
+            inputs = [dy.concatenate([inp, lembed]) for inp, lembed in zip(inputs, lang_embeds)]
             all_inputs[l] = inputs
 
         lstm_input = [dy.concatenate_to_batch([all_inputs[j][i] for j in range(len(all_inputs))]) for i in
@@ -219,11 +224,11 @@ class MSTParserLSTM:
         d = self.options.dropout
         h_out = self.bi_rnn(lstm_input, lstm_input[0].dim()[1], d if train else 0, d if train else 0)
 
-        h =  dy.dropout_dim( dy.concatenate_cols(h_out), 1, d) if train else dy.concatenate_cols(h_out)
-        H = self.activation( dy.affine_transform([self.arc_mlp_head_b.expr(), self.arc_mlp_head.expr(), h]))
-        M = self.activation( dy.affine_transform([self.arc_mlp_dep_b.expr(), self.arc_mlp_dep.expr(), h]))
-        HL = self.activation( dy.affine_transform([self.label_mlp_head_b.expr(), self.label_mlp_head.expr(), h]))
-        ML = self.activation( dy.affine_transform([self.label_mlp_dep_b.expr(), self.label_mlp_dep.expr(), h]))
+        h =  dy.dropout_dim(dy.concatenate_cols(h_out), 1, d) if train else dy.concatenate_cols(h_out)
+        H = self.activation(dy.affine_transform([self.arc_mlp_head_b.expr(), self.arc_mlp_head.expr(), h]))
+        M = self.activation(dy.affine_transform([self.arc_mlp_dep_b.expr(), self.arc_mlp_dep.expr(), h]))
+        HL = self.activation(dy.affine_transform([self.label_mlp_head_b.expr(), self.label_mlp_head.expr(), h]))
+        ML = self.activation(dy.affine_transform([self.label_mlp_dep_b.expr(), self.label_mlp_dep.expr(), h]))
 
         if train:
             H, M, HL, ML =  dy.dropout_dim(H, 1, d),  dy.dropout_dim(M, 1, d),  dy.dropout_dim(HL, 1, d),  dy.dropout_dim(ML, 1, d)

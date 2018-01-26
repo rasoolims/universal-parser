@@ -96,11 +96,11 @@ class MSTParserLSTM:
                 self.elookup.init_row(self.evocab[lang][word], external_embedding[lang][word])
 
         if not options.no_init:
-            self.lang_lookup = self.model.add_lookup_parameters((len(lang2id), options.le), init=dy.NumpyInitializer(lang_lookup_params))
+            self.lang_lookup = self.model.add_lookup_parameters((len(lang2id), net_options.le), init=dy.NumpyInitializer(lang_lookup_params))
         else:
-            self.lang_lookup = self.model.add_lookup_parameters((len(lang2id), options.le))
+            self.lang_lookup = self.model.add_lookup_parameters((len(lang2id), net_options.le))
         self.lang2id = lang2id
-        
+
         input_dim = edim + net_options.pe if self.options.use_pos else edim
 
         self.deep_lstms = dy.BiRNNBuilder(net_options.layer, input_dim +  net_options.le, net_options.rnn * 2, self.model, dy.VanillaLSTMBuilder)

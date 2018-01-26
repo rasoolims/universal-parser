@@ -7,7 +7,7 @@ import codecs, os, sys
 from linalg import *
 
 class MSTParserLSTM:
-    def __init__(self, pos, rels, options, chars, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params, lang_lookup_params, net_options):
+    def __init__(self, pos, rels, options, chars, lang2id, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params, lang_lookup_params, net_options):
         self.model = dy.Model()
         self.PAD = 1
         self.options = options
@@ -95,12 +95,12 @@ class MSTParserLSTM:
             for word in external_embedding[lang].keys():
                 self.elookup.init_row(self.evocab[lang][word], external_embedding[lang][word])
 
-        self.lang2id = {lang: i for i, lang in enumerate(self.evocab.keys())}
         if not options.no_init:
-            self.lang_lookup = self.model.add_lookup_parameters((len(self.lang2id), options.le), init=dy.NumpyInitializer(lang_lookup_params))
+            self.lang_lookup = self.model.add_lookup_parameters((len(lang2id), options.le), init=dy.NumpyInitializer(lang_lookup_params))
         else:
-            self.lang_lookup = self.model.add_lookup_parameters((len(self.lang2id), options.le))
-
+            self.lang_lookup = self.model.add_lookup_parameters((len(lang2id), options.le))
+        self.lang2id = lang2id
+        
         input_dim = edim + net_options.pe if self.options.use_pos else edim
 
         self.deep_lstms = dy.BiRNNBuilder(net_options.layer, input_dim +  net_options.le, net_options.rnn * 2, self.model, dy.VanillaLSTMBuilder)

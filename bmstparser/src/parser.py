@@ -87,7 +87,7 @@ if __name__ == '__main__':
     else:
         print 'reading shared model'
         with open(options.netfile, 'r') as paramsfp:
-            chars, net_options, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params, lang_lookup_params = pickle.load(paramsfp)
+            chars, lang2id, net_options, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params, lang_lookup_params = pickle.load(paramsfp)
 
         universal_tags = ['ADJ', 'ADP', 'ADV', 'AUX', 'CCONJ', 'DET', 'INTJ', 'NOUN', 'NUM', 'PART', 'PRON', 'PROPN',
                           'PUNCT', 'SCONJ', 'SYM', 'VERB', 'X']
@@ -100,7 +100,7 @@ if __name__ == '__main__':
         print 'Finished collecting vocab'
 
         print 'Initializing lstm mstparser:'
-        parser = mstlstm.MSTParserLSTM(universal_tags, rels, options, chars, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params, lang_lookup_params, net_options)
+        parser = mstlstm.MSTParserLSTM(universal_tags, rels, options, chars, lang2id, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params, lang_lookup_params, net_options)
         best_acc = -float('inf')
         t, epoch = 0,1
         train_data = list(utils.read_conll(open(options.conll_train, 'r')))

@@ -121,7 +121,7 @@ if __name__ == '__main__':
                 if t%10==0:
                     sys.stdout.write('overall progress:' + str(round(100 * float(t) / options.t, 2)) + '% current progress:' + str(round(100 * float(i + 1) / len(mini_batches), 2)) + '% loss=' + str(closs / 10) + ' time: ' + str(time.time() - start) + '\n')
                     if t%100==0:
-                        if options.eval_non_avg:
+                        if options.eval_non_avg and options.conll_dev:
                             uas, las = test(parser, dev_buckets, options.conll_dev, options.output + '/dev.out')
                             print 'dev non-avg acc', las, uas
                             if las > best_las:
@@ -148,5 +148,9 @@ if __name__ == '__main__':
                 sys.exit(0)
             print 'current learning rate', parser.trainer.learning_rate, 't:', t
             epoch+=1
+
+        if not options.conll_dev:
+            print 'Saving default model without dev-tuning'
+            avg_model.Save(options.output + '/model')
 
 

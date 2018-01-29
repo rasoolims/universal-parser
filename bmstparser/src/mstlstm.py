@@ -273,6 +273,36 @@ class MSTParserLSTM:
 
         self.generate_emb_mask = _emb_mask_generator
 
+    def moving_avg(self, r1, r2):
+        self.a_plookup = r1 * self.a_plookup + r2 * self.plookup.expr().npvalue()
+        self.a_lang_lookup = r1 * self.a_lang_lookup + r2 * self.lang_lookup.expr().npvalue()
+        self.a_arc_mlp_head = r1 * self.a_arc_mlp_head + r2 * self.arc_mlp_head.expr().npvalue()
+        self.a_arc_mlp_head_b = r1 * self.a_arc_mlp_head_b + r2 * self.arc_mlp_head_b.expr().npvalue()
+        self.a_label_mlp_head = r1 * self.a_label_mlp_head + r2 * self.label_mlp_head.expr().npvalue()
+        self.a_label_mlp_head_b = r1 * self.a_label_mlp_head_b + r2 * self.label_mlp_head_b.expr().npvalue()
+        self.a_arc_mlp_dep = r1 * self.a_arc_mlp_dep + r2 * self.arc_mlp_dep.expr().npvalue()
+        self.a_arc_mlp_dep_b = r1 * self.a_arc_mlp_dep_b + r2 * self.arc_mlp_dep_b.expr().npvalue()
+        self.a_label_mlp_dep = r1 * self.a_label_mlp_dep + r2 * self.label_mlp_dep.expr().npvalue()
+        self.a_label_mlp_dep_b = r1 * self.a_label_mlp_dep_b + r2 * self.label_mlp_dep_b.expr().npvalue()
+        self.a_w_arc = r1 * self.a_w_arc + r2 * self.w_arc.expr().npvalue()
+        self.a_u_label = r1 * self.a_u_label + r2 * self.u_label.expr().npvalue()
+
+        for i in range(len(self.deep_lstms.builder_layers)):
+            builder = self.deep_lstms.builder_layers[i]
+            params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
+            for j in range(len(params)):
+                self.a_lstms[i][j] = r1 * self.a_lstms[i][j] + r2 * params[j].expr().npvalue()
+
+        for lang in self.a_clookup.keys():
+            self.a_clookup[lang] = r1 * self.a_clookup[lang] + r2 * self.clookup[lang].expr().npvalue()
+            for i in range(len(self.char_lstm[lang].builder_layers)):
+                builder = self.char_lstm[lang].builder_layers[i]
+                params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
+                for j in range(len(params)):
+                    self.ac_lstms[lang][i][j] = r1 * self.ac_lstms[lang][i][j] + r2 * params[j].expr().npvalue()
+            self.a_proj_mat[lang] = r1 * self.a_proj_mat[lang] + r2 * self.proj_mat[lang].expr().npvalue()
+        dy.renew_cg()
+
     def bilinear(self, M, W, H, input_size, seq_len, batch_size, num_outputs=1, bias_x=False, bias_y=False):
         if bias_x:
             M = dy.concatenate([M, dy.inputTensor(np.ones((1, seq_len), dtype=np.float32))])
@@ -388,8 +418,8 @@ class MSTParserLSTM:
             err.backward()
             self.trainer.update()
             dy.renew_cg()
-            # ratio = min(0.9999, float(t) / (9 + t))
-            # self.moving_avg(ratio, 1 - ratio)
+            ratio = min(0.9999, float(t) / (9 + t))
+            self.moving_avg(ratio, 1 - ratio)
             return t + 1, loss
         else:
             arc_probs = np.transpose(np.reshape(dy.softmax(flat_scores).npvalue(), (shape_0,  shape_0,  shape_1), 'F'))

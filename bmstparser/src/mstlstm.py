@@ -44,6 +44,30 @@ class MSTParserLSTM:
                         if isinstance(node, ConllEntry):
                             words[node.lang_id].add(node.form)
 
+        self.chars = dict()
+        self.evocab = dict()
+        external_embedding, word_index = dict(), 2
+        for f in os.listdir(options.external_embedding):
+            lang = f[:-3]
+            efp = gzip.open(options.external_embedding + '/' + f, 'r')
+            external_embedding[lang] = dict()
+            for line in efp:
+                spl = line.strip().split(' ')
+                if len(spl) > 2:
+                    w = spl[0]
+                    if w in words[lang]:
+                        external_embedding[lang][w] = [float(f) for f in spl[1:]]
+            efp.close()
+
+            self.evocab[lang] = {word: i + word_index for i, word in enumerate(external_embedding[lang])}
+            word_index += len(self.evocab[lang])
+
+            if len(external_embedding[lang]) > 0:
+                edim = len(external_embedding[lang].values()[0])
+            self.chars[lang] = {c: i + 2 for i, c in enumerate(chars[lang])}
+
+            print 'Loaded vector', edim, 'and', len(external_embedding[lang]), 'for', lang
+
         if not from_model:
             if not options.no_init:
                 self.plookup = self.model.add_lookup_parameters((len(pos) + 2, net_options.pe), init = dy.NumpyInitializer(plookup_params))
@@ -52,34 +76,12 @@ class MSTParserLSTM:
 
             if not options.tune_net:
                 self.plookup.set_updated(False)
-            self.chars = dict()
-            self.evocab = dict()
+
             self.clookup = dict()
             self.char_lstm = dict()
             self.proj_mat = dict()
-            external_embedding = dict()
-            word_index = 2
-            for f in os.listdir(options.external_embedding):
-                lang = f[:-3]
-                efp = gzip.open(options.external_embedding + '/' + f, 'r')
-                external_embedding[lang] =  dict()
-                for line in efp:
-                    spl = line.strip().split(' ')
-                    if len(spl) > 2:
-                        w = spl[0]
-                        if w in words[lang]:
-                            external_embedding[lang][w] = [float(f) for f in spl[1:]]
-                efp.close()
 
-                self.evocab[lang] = {word: i + word_index for i, word in enumerate(external_embedding[lang])}
-                word_index += len(self.evocab[lang])
-
-                if len(external_embedding[lang]) > 0:
-                    edim = len(external_embedding[lang].values()[0])
-                self.chars[lang] = {c: i + 2 for i, c in enumerate(chars[lang])}
-
-                print 'Loaded vector', edim, 'and', len(external_embedding[lang]), 'for', lang
-
+            for lang in self.evocab.keys():
                 if not options.no_init:
                     self.clookup[lang] = self.model.add_lookup_parameters((len(chars[lang]) + 2, net_options.ce), init=dy.NumpyInitializer(clookup_params[lang]))
                 else:
@@ -196,6 +198,50 @@ class MSTParserLSTM:
 
                 self.a_proj_mat[lang] = np.ndarray(shape=((edim + net_options.pe, edim + net_options.pe)), dtype=float)
                 self.a_proj_mat[lang].fill(0)
+        else:
+            self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe), init=dy.NumpyInitializer(from_model.a_plookup))
+            self.lang_lookup = self.model.add_lookup_parameters((net_options.le, options.le), init=dy.NumpyInitializer(from_model.a_lang_lookup))
+            self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2),
+                                                          init=dy.NumpyInitializer(from_model.a_arc_mlp_head))
+            self.arc_mlp_head_b = self.model.add_parameters((options.arc_mlp,),
+                                                            init=dy.NumpyInitializer(from_model.a_arc_mlp_head_b))
+            self.label_mlp_head = self.model.add_parameters((options.label_mlp, options.rnn * 2),
+                                                            init=dy.NumpyInitializer(from_model.a_label_mlp_head))
+            self.label_mlp_head_b = self.model.add_parameters((options.label_mlp,),
+                                                              init=dy.NumpyInitializer(from_model.a_label_mlp_head_b))
+            self.arc_mlp_dep = self.model.add_parameters((options.arc_mlp, options.rnn * 2),
+                                                         init=dy.NumpyInitializer(from_model.a_arc_mlp_dep))
+            self.arc_mlp_dep_b = self.model.add_parameters((options.arc_mlp,),
+                                                           init=dy.NumpyInitializer(from_model.a_arc_mlp_dep_b))
+            self.label_mlp_dep = self.model.add_parameters((options.label_mlp, options.rnn * 2),
+                                                           init=dy.NumpyInitializer(from_model.a_label_mlp_dep))
+            self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,),
+                                                             init=dy.NumpyInitializer(from_model.a_label_mlp_dep_b))
+            self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp + 1),
+                                                   init=dy.NumpyInitializer(from_model.a_w_arc))
+            self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp + 1), options.label_mlp + 1),
+                                                     init=dy.NumpyInitializer(from_model.a_u_label))
+            input_dim = edim + options.pe if self.options.use_pos else edim
+            self.deep_lstms = dy.BiRNNBuilder(options.layer, input_dim, options.rnn * 2, self.model, dy.VanillaLSTMBuilder)
+            for i in range(len(self.deep_lstms.builder_layers)):
+                builder = self.deep_lstms.builder_layers[i]
+                params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
+                for j in range(len(params)):
+                    params[j].set_value(from_model.a_lstms[i][j])
+
+            self.clookup = self.model.add_lookup_parameters((len(chars) + 2, options.ce),
+                                                            init=dy.NumpyInitializer(from_model.a_clookup))
+            self.char_lstm, self.proj_mat = dict(), dict()
+            for lang in from_model.ac_lstms.keys():
+                self.char_lstm[lang] = dy.BiRNNBuilder(1, options.ce, edim, self.model, dy.VanillaLSTMBuilder)
+                for i in range(len(self.char_lstm[lang] .builder_layers)):
+                    builder = self.char_lstm[lang].builder_layers[i]
+                    params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
+                    for j in range(len(params)):
+                        params[j].set_value(from_model.ac_lstms[lang] [i][j])
+                self.proj_mat[lang] = self.model.add_parameters((edim + net_options.pe, edim + net_options.pe),
+                                                           init=dy.NumpyInitializer(from_model.a_proj_mat[lang]))
+
 
         self.elookup = self.model.add_lookup_parameters((word_index, edim))
         self.num_all_words = word_index

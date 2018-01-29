@@ -176,7 +176,7 @@ class MSTParserLSTM:
                         this_layer.append(x)
                 self.a_lstms.append(this_layer)
 
-            self.a_clookup = dict()
+            self.a_clookup, self.ac_lstms = dict(), dict()
             self.a_proj_mat = dict()
             for lang in self.char_lstm.keys():
                 self.a_clookup[lang] = np.ndarray(shape=(options.ce, len(chars) + 2), dtype=float)

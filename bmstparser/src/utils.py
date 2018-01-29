@@ -31,7 +31,7 @@ class ConllEntry:
         return '\t'.join(['_' if v is None else v for v in values])
 
 
-def vocab(conll_path, min_count=2):
+def vocab(conll_path):
     relCount = Counter()
     with open(conll_path, 'r') as conllFP:
         for sentence in read_conll(conllFP):
@@ -121,7 +121,6 @@ def get_minibatch(batch, max_c_len, cur_len, model):
         all_batches += batch[lang_id]
         langs += [lang_id] * len(batch[lang_id])
     chars, pwords, pos = dict(), dict(), dict()
-    num_words = 0
     for lang_id in batch.keys():
         chars_ = [list() for _ in range(max_c_len)]
         for c_pos in range(max_c_len):
@@ -135,9 +134,8 @@ def get_minibatch(batch, max_c_len, cur_len, model):
             chars_[c_pos] = np.array(ch)
         chars[lang_id] = np.array(chars_)
         pwords[lang_id] = np.array([np.array(
-            [model.evocab[langs[i]].get(batch[lang_id][i][j].form, 0) if j < len(batch[lang_id][i]) else model.PAD for
-             i in
-             range(len(batch[lang_id]))]) for j in range(cur_len)])
+            [model.evocab[langs[i]].get(batch[lang_id][i][j].form, 0) if j < len(batch[lang_id][i]) else model.PAD
+             for i in range(len(batch[lang_id]))]) for j in range(cur_len)])
         pos[lang_id] = np.array([np.array(
             [model.pos.get(batch[lang_id][i][j].pos, 0) if j < len(batch[lang_id][i]) else model.PAD for i in
              range(len(batch[lang_id]))]) for j in range(cur_len)])

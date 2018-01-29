@@ -1,7 +1,8 @@
 import dynet as dy
-from utils import read_conll, write_conll
+from utils import read_conll, write_conll, ConllEntry
+from collections import defaultdict
 from operator import itemgetter
-import utils, time, random, decoder, gzip
+import time, random, decoder, gzip
 import numpy as np
 import codecs, os, sys
 from linalg import *
@@ -22,12 +23,28 @@ class MSTParserLSTM:
         self.irels = ['PAD'] + rels
         self.PAD_REL = 0
         edim = net_options.we
-        words = None
-        if options.words_file:
-            words = set()
-            for line in codecs.open(options.words_file, 'r'):
-                for w in line.strip().split():
-                    words.add(w)
+        words = defaultdict(set)
+        if options.conll_train:
+            with open(options.conll_train, 'r') as conllFP:
+                for sentence in read_conll(conllFP):
+                    for node in sentence:
+                        if isinstance(node, ConllEntry):
+                            words[node.lang_id].add(node.form)
+        if options.conll_dev:
+            with open(options.conll_dev, 'r') as conllFP:
+                for sentence in read_conll(conllFP):
+                    for sentence in read_conll(conllFP):
+                        for node in sentence:
+                            if isinstance(node, ConllEntry):
+                                words[node.lang_id].add(node.form)
+        if options.conll_test:
+            with open(options.conll_test, 'r') as conllFP:
+                for sentence in read_conll(conllFP):
+                    for sentence in read_conll(conllFP):
+                        for node in sentence:
+                            if isinstance(node, ConllEntry):
+                                words[node.lang_id].add(node.form)
+
         if not options.no_init:
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, net_options.pe), init = dy.NumpyInitializer(plookup_params))
         else:
@@ -50,7 +67,7 @@ class MSTParserLSTM:
                 spl = line.strip().split(' ')
                 if len(spl) > 2:
                     w = spl[0]
-                    if (not words) or (w in words):
+                    if w in words[lang]:
                         external_embedding[lang][w] = [float(f) for f in spl[1:]]
             efp.close()
 

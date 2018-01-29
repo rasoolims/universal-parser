@@ -29,7 +29,6 @@ if __name__ == '__main__':
     parser = OptionParser()
     parser.add_option("--train", dest="conll_train", help="Annotated CONLL train file", metavar="FILE", default=None)
     parser.add_option("--dev", dest="conll_dev", help="Annotated CONLL dev file", metavar="FILE", default=None)
-    parser.add_option("--words", dest="words_file", help="raw text of possible files (for squeezing embeddings)", metavar="FILE", default=None)
     parser.add_option("--test", dest="conll_test", help="Annotated CONLL test file", metavar="FILE", default=None)
     parser.add_option("--output", dest="conll_output",  metavar="FILE", default=None)
     parser.add_option("--extrn", dest="external_embedding", help="External embeddings", metavar="FILE")

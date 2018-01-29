@@ -8,7 +8,8 @@ import codecs, os, sys
 from linalg import *
 
 class MSTParserLSTM:
-    def __init__(self, pos, rels, options, chars, lang2id, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params, lang_lookup_params, net_options):
+    def __init__(self, pos, rels, options, chars, lang2id, deep_lstm_params, char_lstm_params, clookup_params,
+                 proj_mat_params, plookup_params, lang_lookup_params, net_options):
         self.model = dy.Model()
         self.PAD = 1
         self.options = options
@@ -33,17 +34,15 @@ class MSTParserLSTM:
         if options.conll_dev:
             with open(options.conll_dev, 'r') as conllFP:
                 for sentence in read_conll(conllFP):
-                    for sentence in read_conll(conllFP):
-                        for node in sentence:
-                            if isinstance(node, ConllEntry):
-                                words[node.lang_id].add(node.form)
+                    for node in sentence:
+                        if isinstance(node, ConllEntry):
+                            words[node.lang_id].add(node.form)
         if options.conll_test:
             with open(options.conll_test, 'r') as conllFP:
                 for sentence in read_conll(conllFP):
-                    for sentence in read_conll(conllFP):
-                        for node in sentence:
-                            if isinstance(node, ConllEntry):
-                                words[node.lang_id].add(node.form)
+                    for node in sentence:
+                        if isinstance(node, ConllEntry):
+                            words[node.lang_id].add(node.form)
 
         if not options.no_init:
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, net_options.pe), init = dy.NumpyInitializer(plookup_params))

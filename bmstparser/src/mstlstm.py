@@ -43,31 +43,10 @@ class MSTParserLSTM:
                         if isinstance(node, ConllEntry):
                             words[node.lang_id].add(node.form)
 
-        self.chars = dict()
-        self.evocab = dict()
-        external_embedding, word_index = dict(), 2
-        for f in os.listdir(options.external_embedding):
-            lang = f[:-3]
-            efp = gzip.open(options.external_embedding + '/' + f, 'r')
-            external_embedding[lang] = dict()
-            for line in efp:
-                spl = line.strip().split(' ')
-                if len(spl) > 2:
-                    w = spl[0]
-                    if w in words[lang]:
-                        external_embedding[lang][w] = [float(f) for f in spl[1:]]
-            efp.close()
-
-            self.evocab[lang] = {word: i + word_index for i, word in enumerate(external_embedding[lang])}
-            word_index += len(self.evocab[lang])
-
-            if len(external_embedding[lang]) > 0:
-                edim = len(external_embedding[lang].values()[0])
-            self.chars[lang] = {c: i + 2 for i, c in enumerate(chars[lang])}
-
-            print 'Loaded vector', edim, 'and', len(external_embedding[lang]), 'for', lang
-
         if not from_model:
+            self.chars = dict()
+            self.evocab = dict()
+            external_embedding, word_index = dict(), 2
             if not options.no_init:
                 self.plookup = self.model.add_lookup_parameters((len(pos) + 2, net_options.pe), init = dy.NumpyInitializer(plookup_params))
             else:
@@ -80,7 +59,27 @@ class MSTParserLSTM:
             self.char_lstm = dict()
             self.proj_mat = dict()
 
-            for lang in self.evocab.keys():
+            for f in os.listdir(options.external_embedding):
+                lang = f[:-3]
+                efp = gzip.open(options.external_embedding + '/' + f, 'r')
+                external_embedding[lang] = dict()
+                for line in efp:
+                    spl = line.strip().split(' ')
+                    if len(spl) > 2:
+                        w = spl[0]
+                        if w in words[lang]:
+                            external_embedding[lang][w] = [float(f) for f in spl[1:]]
+                efp.close()
+
+                self.evocab[lang] = {word: i + word_index for i, word in enumerate(external_embedding[lang])}
+                word_index += len(self.evocab[lang])
+
+                if len(external_embedding[lang]) > 0:
+                    edim = len(external_embedding[lang].values()[0])
+                self.chars[lang] = {c: i + 2 for i, c in enumerate(chars[lang])}
+
+                print 'Loaded vector', edim, 'and', len(external_embedding[lang]), 'for', lang
+
                 if not options.no_init:
                     self.clookup[lang] = self.model.add_lookup_parameters((len(chars[lang]) + 2, net_options.ce), init=dy.NumpyInitializer(clookup_params[lang]))
                 else:
@@ -198,6 +197,11 @@ class MSTParserLSTM:
                 self.a_proj_mat[lang] = np.ndarray(shape=((edim + net_options.pe, edim + net_options.pe)), dtype=float)
                 self.a_proj_mat[lang].fill(0)
         else:
+            self.chars = from_model.chars
+            for lang in from_model.evocab.keys():
+                self.evocab[lang] = from_model.evocab
+                self.elookup[lang] = self.model.add_lookup_parameters((len(self.evocab[lang]) + 2, edim), init=dy.NumpyInitializer(from_model.elookup[lang].expr().npvalue()))
+
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe), init=dy.NumpyInitializer(from_model.a_plookup))
             self.lang_lookup = self.model.add_lookup_parameters((net_options.le, options.le), init=dy.NumpyInitializer(from_model.a_lang_lookup))
             self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2),

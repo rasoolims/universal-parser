@@ -235,7 +235,7 @@ class MSTParserLSTM:
             self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp + 1), options.label_mlp + 1),
                                                      init=dy.NumpyInitializer(from_model.a_u_label))
             input_dim = edim + options.pe if self.options.use_pos else edim
-            self.deep_lstms = dy.BiRNNBuilder(options.layer, input_dim, options.rnn * 2, self.model, dy.VanillaLSTMBuilder)
+            self.deep_lstms = dy.BiRNNBuilder(options.layer, input_dim +  net_options.le, net_options.rnn * 2, self.model, dy.VanillaLSTMBuilder)
             for i in range(len(self.deep_lstms.builder_layers)):
                 builder = self.deep_lstms.builder_layers[i]
                 params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]

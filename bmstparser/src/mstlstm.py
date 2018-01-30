@@ -213,7 +213,7 @@ class MSTParserLSTM:
             self.elookup = self.model.add_lookup_parameters((self.num_all_words, edim), init=dy.NumpyInitializer(from_model.elookup.expr().npvalue()))
 
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe), init=dy.NumpyInitializer(from_model.a_plookup))
-            self.lang_lookup = self.model.add_lookup_parameters((net_options.le, options.le), init=dy.NumpyInitializer(from_model.a_lang_lookup))
+            self.lang_lookup = self.model.add_lookup_parameters((len(lang2id), net_options.le), init=dy.NumpyInitializer(from_model.a_lang_lookup))
             self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2),
                                                           init=dy.NumpyInitializer(from_model.a_arc_mlp_head))
             self.arc_mlp_head_b = self.model.add_parameters((options.arc_mlp,),

@@ -24,6 +24,7 @@ class MSTParserLSTM:
         self.PAD_REL = 0
         edim = net_options.we
         words = defaultdict(set)
+        self.lang2id = lang2id
         if options.conll_train:
             with open(options.conll_train, 'r') as conllFP:
                 for sentence in read_conll(conllFP):
@@ -107,7 +108,7 @@ class MSTParserLSTM:
                 self.lang_lookup = self.model.add_lookup_parameters((len(lang2id), net_options.le), init=dy.NumpyInitializer(lang_lookup_params))
             else:
                 self.lang_lookup = self.model.add_lookup_parameters((len(lang2id), net_options.le))
-            self.lang2id = lang2id
+
 
             input_dim = edim + net_options.pe if self.options.use_pos else edim
 

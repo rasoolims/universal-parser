@@ -209,7 +209,7 @@ class MSTParserLSTM:
             self.evocab, self.elookup = dict(), dict()
             for lang in from_model.evocab.keys():
                 self.evocab[lang] = from_model.evocab[lang]
-                self.elookup[lang] = self.model.add_lookup_parameters((len(self.evocab[lang]) + 2, edim), init=dy.NumpyInitializer(from_model.elookup[lang].expr().npvalue()))
+            self.elookup = self.model.add_lookup_parameters((self.num_all_words, edim), init=dy.NumpyInitializer(from_model.elookup.expr().npvalue()))
 
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe), init=dy.NumpyInitializer(from_model.a_plookup))
             self.lang_lookup = self.model.add_lookup_parameters((net_options.le, options.le), init=dy.NumpyInitializer(from_model.a_lang_lookup))

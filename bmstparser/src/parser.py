@@ -129,15 +129,15 @@ if __name__ == '__main__':
                 if t%10==0:
                     sys.stdout.write('overall progress:' + str(round(100 * float(t) / options.t, 2)) + '% current progress:' + str(round(100 * float(i + 1) / len(mini_batches), 2)) + '% loss=' + str(closs / 10) + ' time: ' + str(time.time() - start) + '\n')
                     if t%10==0:
-                        uas, las = test(parser, dev_buckets, options.conll_dev, options.output + '/dev.out')
-                        print 'dev non-avg acc', las, uas
-                        if las > best_las:
-                            best_las = las
-                            print 'saving non-avg with', best_las, uas
-                            parser.save(options.output + '/model')
-                            no_improvement = 0
-                        else:
-                            no_improvement += 1
+                        # uas, las = test(parser, dev_buckets, options.conll_dev, options.output + '/dev.out')
+                        # print 'dev non-avg acc', las, uas
+                        # if las > best_las:
+                        #     best_las = las
+                        #     print 'saving non-avg with', best_las, uas
+                        #     parser.save(options.output + '/model')
+                        #     no_improvement = 0
+                        # else:
+                        #     no_improvement += 1
                         avg_model = mstlstm.MSTParserLSTM(universal_tags, rels, options, chars, lang2id, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params, lang_lookup_params, net_options, parser)
                         uas, las = test(avg_model, dev_buckets, options.conll_dev, options.output+'/dev.out')
                         print 'dev avg acc', las, uas

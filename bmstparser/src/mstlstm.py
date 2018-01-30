@@ -196,6 +196,14 @@ class MSTParserLSTM:
 
                 self.a_proj_mat[lang] = np.ndarray(shape=((edim + net_options.pe, edim + net_options.pe)), dtype=float)
                 self.a_proj_mat[lang].fill(0)
+                self.num_all_words = word_index
+                self.elookup = self.model.add_lookup_parameters((self.num_all_words, edim))
+                self.elookup.set_updated(False)
+                self.elookup.init_row(0, [0] * edim)
+                self.elookup.init_row(1, [0] * edim)
+                for lang in self.evocab.keys():
+                    for word in external_embedding[lang].keys():
+                        self.elookup.init_row(self.evocab[lang][word], external_embedding[lang][word])
         else:
             self.chars = from_model.chars
             for lang in from_model.evocab.keys():
@@ -245,15 +253,6 @@ class MSTParserLSTM:
                 self.proj_mat[lang] = self.model.add_parameters((edim + net_options.pe, edim + net_options.pe),
                                                            init=dy.NumpyInitializer(from_model.a_proj_mat[lang]))
 
-
-        self.elookup = self.model.add_lookup_parameters((word_index, edim))
-        self.num_all_words = word_index
-        self.elookup.set_updated(False)
-        self.elookup.init_row(0, [0] * edim)
-        self.elookup.init_row(1, [0] * edim)
-        for lang in self.evocab.keys():
-            for word in external_embedding[lang].keys():
-                self.elookup.init_row(self.evocab[lang][word], external_embedding[lang][word])
 
         def _emb_mask_generator(seq_len, batch_size):
             ret = []

@@ -19,7 +19,6 @@ class MSTParserLSTM:
         self.dropout = False if options.dropout == 0.0 else True
         self.pos = {p: ind + 2 for ind, p in enumerate(pos)}
         self.rels = {word: ind + 1 for ind, word in enumerate(rels)}
-        self.chars = {c: i + 2 for i, c in enumerate(chars)}
         self.root_id = self.rels['root']
         self.irels = ['PAD'] + rels
         self.PAD_REL = 0

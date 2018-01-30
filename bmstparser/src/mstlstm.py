@@ -206,6 +206,7 @@ class MSTParserLSTM:
                         self.elookup.init_row(self.evocab[lang][word], external_embedding[lang][word])
         else:
             self.chars = from_model.chars
+            self.num_all_words = from_model.num_all_words
             self.evocab, self.elookup = dict(), dict()
             for lang in from_model.evocab.keys():
                 self.evocab[lang] = from_model.evocab[lang]

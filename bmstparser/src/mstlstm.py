@@ -242,11 +242,11 @@ class MSTParserLSTM:
                 for j in range(len(params)):
                     params[j].set_value(from_model.a_lstms[i][j])
 
-            self.clookup = self.model.add_lookup_parameters((len(chars) + 2, options.ce),
-                                                            init=dy.NumpyInitializer(from_model.a_clookup))
             self.char_lstm, self.proj_mat = dict(), dict()
             for lang in from_model.ac_lstms.keys():
                 self.char_lstm[lang] = dy.BiRNNBuilder(1, options.ce, edim, self.model, dy.VanillaLSTMBuilder)
+                self.clookup[lang] = self.model.add_lookup_parameters((len(chars[lang]) + 2, net_options.ce),
+                                                                init=dy.NumpyInitializer(from_model.a_clookup[lang]))
                 for i in range(len(self.char_lstm[lang] .builder_layers)):
                     builder = self.char_lstm[lang].builder_layers[i]
                     params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]

@@ -150,6 +150,7 @@ if __name__ == '__main__':
             epoch+=1
 
         if not options.conll_dev:
+            avg_model = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, options, parser)
             print 'Saving default model without dev-tuning'
             avg_model.Save(options.output + '/model')
 

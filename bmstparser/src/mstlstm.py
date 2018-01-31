@@ -115,6 +115,7 @@ class MSTParserLSTM:
         else:
             self.lang_lookup = self.model.add_lookup_parameters((len(lang2id), net_options.le))
         self.lang2id = lang2id
+        self.lang_lookup_syntax = self.model.add_lookup_parameters((len(lang2id), net_options.le))
 
         input_dim = edim + net_options.pe if self.options.use_pos else edim
 
@@ -127,15 +128,15 @@ class MSTParserLSTM:
                     params[j].set_value(deep_lstm_params[i][j])
                     if not options.tune_net: params[j].set_updated(False)
 
-        w_mlp_arc = orthonormal_initializer(options.arc_mlp, options.rnn * 2)
-        w_mlp_label = orthonormal_initializer(options.label_mlp, options.rnn * 2)
-        self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init= dy.NumpyInitializer(w_mlp_arc))
+        w_mlp_arc = orthonormal_initializer(options.arc_mlp, net_options.le + options.rnn * 2)
+        w_mlp_label = orthonormal_initializer(options.label_mlp, net_options.le + options.rnn * 2)
+        self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, net_options.le + options.rnn * 2), init= dy.NumpyInitializer(w_mlp_arc))
         self.arc_mlp_head_b = self.model.add_parameters((options.arc_mlp,), init = dy.ConstInitializer(0))
-        self.label_mlp_head = self.model.add_parameters((options.label_mlp, options.rnn * 2), init= dy.NumpyInitializer(w_mlp_label))
+        self.label_mlp_head = self.model.add_parameters((options.label_mlp, net_options.le + options.rnn * 2), init= dy.NumpyInitializer(w_mlp_label))
         self.label_mlp_head_b = self.model.add_parameters((options.label_mlp,), init = dy.ConstInitializer(0))
-        self.arc_mlp_dep = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init= dy.NumpyInitializer(w_mlp_arc))
+        self.arc_mlp_dep = self.model.add_parameters((options.arc_mlp, net_options.le +options.rnn * 2), init= dy.NumpyInitializer(w_mlp_arc))
         self.arc_mlp_dep_b = self.model.add_parameters((options.arc_mlp,), init = dy.ConstInitializer(0))
-        self.label_mlp_dep = self.model.add_parameters((options.label_mlp, options.rnn * 2), init= dy.NumpyInitializer(w_mlp_label))
+        self.label_mlp_dep = self.model.add_parameters((options.label_mlp, net_options.le + options.rnn * 2), init= dy.NumpyInitializer(w_mlp_label))
         self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init = dy.ConstInitializer(0))
         self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp+1), init = dy.ConstInitializer(0))
         self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp+1), options.label_mlp+1), init = dy.ConstInitializer(0))
@@ -223,6 +224,7 @@ class MSTParserLSTM:
             posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in
                         range(len(pos_tags[lang]))] if self.options.use_pos else None
             lang_embeds = [dy.lookup_batch(self.lang_lookup, [self.lang2id[lang]]*len(pos_tags[lang][i])) for i in range(len(pos_tags[lang]))]
+            syntax_lang_embeds = [dy.lookup_batch(self.lang_lookup_syntax, [self.lang2id[lang]]*len(pos_tags[lang][i])) for i in range(len(pos_tags[lang]))]
 
             if not train:
                 inputs = [dy.concatenate([w, pos]) for w, pos in
@@ -241,6 +243,8 @@ class MSTParserLSTM:
                       range(len(all_inputs[0]))]
         d = self.options.dropout
         h_out = self.bi_rnn(lstm_input, lstm_input[0].dim()[1], d if train else 0, d if train else 0)
+        print '*', len(h_out), h_out[0].dim(), len(syntax_lang_embeds), syntax_lang_embeds[0].dim()
+        h_out = [dy.concatenate([syntax_lang_embeds[i], h_out[i]]) for i in range(len(h_out))]
 
         h =  dy.dropout_dim(dy.concatenate_cols(h_out), 1, d) if train else dy.concatenate_cols(h_out)
         H = self.activation(dy.affine_transform([self.arc_mlp_head_b.expr(), self.arc_mlp_head.expr(), h]))

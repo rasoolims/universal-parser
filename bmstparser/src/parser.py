@@ -28,9 +28,9 @@ def test(parser, buckets, test_file, output_file):
 
 if __name__ == '__main__':
     parser = OptionParser()
-    parser.add_option("--train", dest="conll_train", help="Annotated CONLL train file", metavar="FILE", default="../data/en-universal-train.conll.ptb")
-    parser.add_option("--dev", dest="conll_dev", help="Annotated CONLL dev file", metavar="FILE", default="../data/en-universal-dev.conll.ptb")
-    parser.add_option("--test", dest="conll_test", help="Annotated CONLL test file", metavar="FILE", default="../data/en-universal-test.conll.ptb")
+    parser.add_option("--train", dest="conll_train", help="Annotated CONLL train file", metavar="FILE", default=None)
+    parser.add_option("--dev", dest="conll_dev", help="Annotated CONLL dev file", metavar="FILE", default=None)
+    parser.add_option("--test", dest="conll_test", help="Annotated CONLL test file", metavar="FILE", default=None)
     parser.add_option("--output", dest="conll_output",  metavar="FILE", default=None)
     parser.add_option("--extrn", dest="external_embedding", help="External embeddings", metavar="FILE")
     parser.add_option("--params", dest="params", help="Parameters file", metavar="FILE", default="params.pickle")
@@ -41,6 +41,7 @@ if __name__ == '__main__':
     parser.add_option("--ce", type="int", dest="ce", default=100)
     parser.add_option("--re", type="int", dest="re", default=25)
     parser.add_option("--t", type="int", dest="t", default=50000)
+    parser.add_option("--epoch", type="int", dest="epoch", default=1000)
     parser.add_option("--arc_mlp", type="int", dest="arc_mlp", default=400)
     parser.add_option("--label_mlp", type="int", dest="label_mlp", default=100)
     parser.add_option("--lr", type="float", dest="lr", default=0.002)
@@ -107,7 +108,7 @@ if __name__ == '__main__':
             dev_buckets[0].append(d)
         best_las = 0
         no_improvement = 0
-        while t<=options.t:
+        while t<=options.t and epoch<options.epoch:
             print 'Starting epoch', epoch, 'time:', time.ctime()
             mini_batches = utils.get_batches(buckets, parser, True)
             start, closs = time.time(), 0

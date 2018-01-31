@@ -245,22 +245,12 @@ class MSTParserLSTM:
         syntax_embeds = [dy.concatenate_to_batch([syntax_embed_inputs[j][i] for j in range(len(syntax_embed_inputs))]) for i in range(len(syntax_embed_inputs[0]))]
         d = self.options.dropout
         h_out = self.bi_rnn(lstm_input, lstm_input[0].dim()[1], d if train else 0, d if train else 0)
-        print '*', len(h_out), h_out[0].dim(), len(syntax_embeds), syntax_embeds[0].dim()
-        v1 = h_out[0].value()
-        print '1'
-        v2 = syntax_embeds[0].value()
-        print '2'
         h_out = [dy.concatenate([syntax_embeds[i], h_out[i]]) for i in range(len(h_out))]
-        v3 = '>', h_out[0].dim()
-        print '3'
-        v4 = h_out[0].value()
-        print '4'
         h =  dy.dropout_dim(dy.concatenate_cols(h_out), 1, d) if train else dy.concatenate_cols(h_out)
         H = self.activation(dy.affine_transform([self.arc_mlp_head_b.expr(), self.arc_mlp_head.expr(), h]))
         M = self.activation(dy.affine_transform([self.arc_mlp_dep_b.expr(), self.arc_mlp_dep.expr(), h]))
         HL = self.activation(dy.affine_transform([self.label_mlp_head_b.expr(), self.label_mlp_head.expr(), h]))
         ML = self.activation(dy.affine_transform([self.label_mlp_dep_b.expr(), self.label_mlp_dep.expr(), h]))
-        print h.dim(), H.dim(), M.dim(), HL.dim(), ML.dim()
         if train:
             H, M, HL, ML =  dy.dropout_dim(H, 1, d),  dy.dropout_dim(M, 1, d),  dy.dropout_dim(HL, 1, d),  dy.dropout_dim(ML, 1, d)
         return H, M, HL, ML

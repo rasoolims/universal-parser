@@ -212,6 +212,7 @@ class MSTParserLSTM:
         '''
         words, pos_tags, chars, langs = sens[0], sens[1], sens[4], sens[5]
         all_inputs = [0] * len(chars.keys())
+        syntax_embed_inputs = [0]* len(chars.keys())
         for l, lang in enumerate(chars.keys()):
             cembed = [dy.lookup_batch(self.clookup[lang], c) for c in chars[lang]]
             char_fwd = self.char_lstm[lang].builder_layers[0][0].initial_state().transduce(cembed)[-1]
@@ -238,17 +239,18 @@ class MSTParserLSTM:
                 inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in inputs]
             inputs = [dy.concatenate([inp, lembed]) for inp, lembed in zip(inputs, lang_embeds)]
             all_inputs[l] = inputs
+            syntax_embed_inputs[l] = syntax_lang_embeds
 
-        lstm_input = [dy.concatenate_to_batch([all_inputs[j][i] for j in range(len(all_inputs))]) for i in
-                      range(len(all_inputs[0]))]
+        lstm_input = [dy.concatenate_to_batch([all_inputs[j][i] for j in range(len(all_inputs))]) for i in range(len(all_inputs[0]))]
+        syntax_embeds = [dy.concatenate_to_batch([syntax_embed_inputs[j][i] for j in range(len(syntax_embed_inputs))]) for i in range(len(syntax_embed_inputs[0]))]
         d = self.options.dropout
         h_out = self.bi_rnn(lstm_input, lstm_input[0].dim()[1], d if train else 0, d if train else 0)
-        print '*', len(h_out), h_out[0].dim(), len(syntax_lang_embeds), syntax_lang_embeds[0].dim()
+        print '*', len(h_out), h_out[0].dim(), len(syntax_embeds), syntax_embeds[0].dim()
         v1 = h_out[0].value()
         print '1'
-        v2 = syntax_lang_embeds[0].value()
+        v2 = syntax_embeds[0].value()
         print '2'
-        h_out = [dy.concatenate([syntax_lang_embeds[i], h_out[i]]) for i in range(len(h_out))]
+        h_out = [dy.concatenate([syntax_embeds[i], h_out[i]]) for i in range(len(h_out))]
         v3 = '>', h_out[0].dim()
         print '3'
         v4 = h_out[0].value()

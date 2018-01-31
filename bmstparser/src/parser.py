@@ -138,16 +138,6 @@ if __name__ == '__main__':
                             no_improvement = 0
                         else:
                             no_improvement += 1
-                        # avg_model = mstlstm.MSTParserLSTM(universal_tags, rels, chars, options, parser)
-                        # uas, las = test(avg_model, dev_buckets, options.conll_dev, options.output+'/dev.out')
-                        # print 'dev avg acc', las, uas
-                        # if las > best_las:
-                        #     best_las = las
-                        #     print 'saving avg with', best_las, uas
-                        #     avg_model.save(options.output + '/model')
-                        #     no_improvement = 0
-                        # else:
-                        #     no_improvement += 1
                     start, closs = time.time(), 0
 
             if no_improvement>options.stop:

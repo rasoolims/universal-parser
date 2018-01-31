@@ -138,16 +138,16 @@ if __name__ == '__main__':
                             no_improvement = 0
                         else:
                             no_improvement += 1
-                        avg_model = mstlstm.MSTParserLSTM(universal_tags, rels, options, chars, lang2id, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params, lang_lookup_params, net_options, parser)
-                        uas, las = test(avg_model, dev_buckets, options.conll_dev, options.output+'/dev.out')
-                        print 'dev avg acc', las, uas
-                        if las > best_las:
-                            best_las = las
-                            print 'saving avg with', best_las, uas
-                            avg_model.save(options.output + '/model')
-                            no_improvement = 0
-                        else:
-                            no_improvement += 1
+                        # avg_model = mstlstm.MSTParserLSTM(universal_tags, rels, chars, options, parser)
+                        # uas, las = test(avg_model, dev_buckets, options.conll_dev, options.output+'/dev.out')
+                        # print 'dev avg acc', las, uas
+                        # if las > best_las:
+                        #     best_las = las
+                        #     print 'saving avg with', best_las, uas
+                        #     avg_model.save(options.output + '/model')
+                        #     no_improvement = 0
+                        # else:
+                        #     no_improvement += 1
                     start, closs = time.time(), 0
 
             if no_improvement>options.stop:
@@ -155,5 +155,4 @@ if __name__ == '__main__':
                 sys.exit(0)
             print 'current learning rate', parser.trainer.learning_rate, 't:', t
             epoch+=1
-
 

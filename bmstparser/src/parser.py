@@ -103,9 +103,10 @@ if __name__ == '__main__':
             buckets[len(d)-min_len-1].append(d)
         buckets = [x for x in buckets if x != []]
         dev_buckets = [list()]
-        dev_data = list(utils.read_conll(open(options.conll_dev, 'r')))
-        for d in dev_data:
-            dev_buckets[0].append(d)
+        if options.conll_dev:
+            dev_data = list(utils.read_conll(open(options.conll_dev, 'r')))
+            for d in dev_data:
+                dev_buckets[0].append(d)
         best_las = 0
         no_improvement = 0
         while t<=options.t and epoch<options.epoch:

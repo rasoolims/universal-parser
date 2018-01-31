@@ -251,7 +251,8 @@ class MSTParserLSTM:
         h_out = [dy.concatenate([syntax_lang_embeds[i], h_out[i]]) for i in range(len(h_out))]
         v3 = '>', h_out[0].dim()
         print '3'
-        print h_out[0].value()
+        v4 = h_out[0].value()
+        print '4'
         h =  dy.dropout_dim(dy.concatenate_cols(h_out), 1, d) if train else dy.concatenate_cols(h_out)
         H = self.activation(dy.affine_transform([self.arc_mlp_head_b.expr(), self.arc_mlp_head.expr(), h]))
         M = self.activation(dy.affine_transform([self.arc_mlp_dep_b.expr(), self.arc_mlp_dep.expr(), h]))

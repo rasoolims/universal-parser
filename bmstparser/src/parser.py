@@ -68,6 +68,7 @@ if __name__ == '__main__':
     parser.add_option("--neg_num", type="int", dest="neg_num", help="number of negative example per language", default=5)
     parser.add_option("--par_batch", type="int", dest="par_batch", default=20)
     parser.add_option("--le", type="int", dest="le", help="language embedding", default=25)
+    parser.add_option("--lm_iter", type="int", dest="lm_iter", help="number of pretraining iterations for LM", default=200)
 
     (options, args) = parser.parse_args()
     print options

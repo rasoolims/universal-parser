@@ -169,6 +169,7 @@ class MSTParserLSTM:
         '''
         words, pos_tags, chars, langs = sens[0], sens[1], sens[4], sens[5]
         all_inputs = [0] * len(chars.keys())
+        print chars.keys()
         for l, lang in enumerate(chars.keys()):
             print lang
             cembed = [dy.lookup_batch(self.clookup[lang], c) for c in chars[lang]]

@@ -162,7 +162,7 @@ if __name__ == '__main__':
             for i, minibatch in enumerate(mini_batches):
                 t, loss = parser.build_graph(minibatch, t, True)
                 mb = par_data.get_next_batch(parser, options.par_batch, options.neg_num)
-                errors.append(parser.train(mb, t > options.lm_iter))
+                errors.append(parser.train_shared_rnn(mb, t > options.lm_iter))
                 if len(errors) >= 100 or t == 1:
                     print '%, loss', sum(errors) / len(errors)
                     errors = []

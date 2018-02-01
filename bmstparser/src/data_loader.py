@@ -127,7 +127,6 @@ class Data:
     def get_minibatch(self, batch, cur_c_len, cur_len, model):
         all_batches = []
         for lang_id in batch.keys():
-            print '>', lang_id
             all_batches += batch[lang_id]
         langs = [all_batches[i][2] for i in range(len(all_batches))]
         batch_num, positions, signs, langs_in_batch = defaultdict(list), defaultdict(list), defaultdict(
@@ -176,5 +175,4 @@ class Data:
         masks = np.array([np.array([1 if 0 < j < len(all_batches[i][0]) else 0 for i in range(len(all_batches))])
                           for j in range(cur_len)])
         mini_batch = (pwords, pos, chars, langs_in_batch, signs, positions, batch_num, char_batches, masks)
-        print '\/\/\/', chars.keys()
         return mini_batch

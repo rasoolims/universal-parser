@@ -49,7 +49,6 @@ class MSTParserLSTM:
             if len(external_embedding[lang]) > 0:
                 edim = len(external_embedding[lang].values()[0])
             self.chars[lang] = {c: i + 2 for i, c in enumerate(chars[lang])}
-            print 'char', lang, len(self.chars[lang])
 
             print 'Loaded vector', edim, 'and', len(external_embedding[lang]), 'for', lang
             self.clookup[lang] = self.model.add_lookup_parameters((len(chars[lang]) + 2, options.ce))
@@ -169,10 +168,7 @@ class MSTParserLSTM:
         '''
         words, pos_tags, chars, langs = sens[0], sens[1], sens[4], sens[5]
         all_inputs = [0] * len(chars.keys())
-        print chars.keys()
-        print langs
         for l, lang in enumerate(chars.keys()):
-            print lang
             cembed = [dy.lookup_batch(self.clookup[lang], c) for c in chars[lang]]
             char_fwd = self.char_lstm[lang].builder_layers[0][0].initial_state().transduce(cembed)[-1]
             char_bckd = self.char_lstm[lang].builder_layers[0][1].initial_state().transduce(reversed(cembed))[-1]
@@ -296,7 +292,7 @@ class MSTParserLSTM:
     def train_shared_rnn(self, mini_batch, train_both=True):
         pwords, pos_tags, chars, langs, signs, positions, batch_num, char_batches, masks = mini_batch
         # Getting the last hidden layer from BiLSTM.
-        rnn_out = self.rnn_mlp(mini_batch, True)
+        rnn_out = self.shared_rnn_mlp(mini_batch, True)
         t_out_ds = [dy.reshape(h_out, (h_out.dim()[0][0], h_out.dim()[1])) for h_out in rnn_out]
         t_outs = [dy.transpose(t_out_d) for t_out_d in t_out_ds]
         last_pos = len(rnn_out) - 1

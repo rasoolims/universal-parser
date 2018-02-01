@@ -138,7 +138,7 @@ if __name__ == '__main__':
         print 'Finished collecting vocab'
 
         print 'Initializing lstm mstparser:'
-        parser = mstlstm.MSTParserLSTM(universal_tags, rels, options, words, chars, par_data)
+        parser = mstlstm.MSTParserLSTM(universal_tags, rels, options, words, chars)
         best_acc = -float('inf')
         t, epoch = 0,1
         train_data = list(utils.read_conll(open(options.conll_train, 'r')))

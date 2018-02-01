@@ -8,7 +8,7 @@ import codecs, os, sys, math
 from linalg import *
 
 class MSTParserLSTM:
-    def __init__(self, pos, rels, options, words, chars, par_data=None):
+    def __init__(self, pos, rels, options, words, chars):
         self.model = dy.Model()
         self.PAD = 1
         self.options = options

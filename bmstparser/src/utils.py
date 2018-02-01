@@ -89,6 +89,19 @@ def normalize(word):
     return '<num>' if numberRegex.match(word) else ('<url>' if urlRegex.match(word) else word.lower())
 
 
+def normalize_sent(sent):
+    words, tags = get_words_tags(sent)
+    return ' '.join(['*root*_ROOT-POS']+[normalize(words[i])+'_'+tags[i] for i in range(len(words))])
+
+def get_words_tags(sent):
+    words, tags = [], []
+    for sen_t in sent.strip().split():
+        r = sen_t.rfind('_')
+        words.append(sen_t[:r])
+        tags.append(sen_t[r + 1:])
+    return words, tags
+
+
 def get_batches(buckets, model, is_train):
     d_copy = [buckets[i][:] for i in range(len(buckets))]
     if is_train:

@@ -65,6 +65,8 @@ if __name__ == '__main__':
     parser.add_option("--no_init", action="store_true", dest="no_init", default=False)
     parser.add_option("--dynet-mem", type="int", dest="mem", default=0)
     parser.add_option("--dynet-autobatch", type="int", dest="dynet-autobatch", default=0)
+    parser.add_option("--neg_num", type="int", dest="neg_num", help="number of negative example per language", default=5)
+    parser.add_option("--par_batch", type="int", dest="par_batch", default=20)
 
     (options, args) = parser.parse_args()
     print options
@@ -158,7 +160,7 @@ if __name__ == '__main__':
             start, closs = time.time(), 0
             for i, minibatch in enumerate(mini_batches):
                 t, loss = parser.build_graph(minibatch, t, True)
-                mb = par_data.get_next_batch(parser, options.batch, options.neg_num)
+                mb = par_data.get_next_batch(parser, options.par_batch, options.neg_num)
                 errors.append(parser.train(mb, t > options.lm_iter))
                 if len(errors) >= 100 or t == 1:
                     print '%, loss', sum(errors) / len(errors)

@@ -127,6 +127,7 @@ class Data:
     def get_minibatch(self, batch, cur_c_len, cur_len, model):
         all_batches = []
         for lang_id in batch.keys():
+            print '>', lang_id
             all_batches += batch[lang_id]
         langs = [all_batches[i][2] for i in range(len(all_batches))]
         batch_num, positions, signs, langs_in_batch = defaultdict(list), defaultdict(list), defaultdict(

@@ -80,11 +80,6 @@ class Data:
                     chars[lang].add(c)
             print lang, len(self.neg_examples[lang]), len(chars[lang]), len(self.lang_unique_sentence_list[lang])
 
-        self.chars = dict()
-        for l in chars.keys():
-            self.chars[l] = sorted(list(chars[l]))
-        self.langs = list(self.langs)
-
         print 'Object data is completely loaded!', len(self.alignments), len(self.dev_alignments)
 
     def get_next_batch(self, model, batch_size=5, neg_num=5):

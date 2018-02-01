@@ -170,6 +170,7 @@ class MSTParserLSTM:
         words, pos_tags, chars, langs = sens[0], sens[1], sens[4], sens[5]
         all_inputs = [0] * len(chars.keys())
         for l, lang in enumerate(chars.keys()):
+            print lang
             cembed = [dy.lookup_batch(self.clookup[lang], c) for c in chars[lang]]
             char_fwd = self.char_lstm[lang].builder_layers[0][0].initial_state().transduce(cembed)[-1]
             char_bckd = self.char_lstm[lang].builder_layers[0][1].initial_state().transduce(reversed(cembed))[-1]

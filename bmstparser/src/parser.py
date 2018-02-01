@@ -1,5 +1,8 @@
 from optparse import OptionParser
 import pickle, utils, mstlstm, sys, os.path, time
+from data_loader import Data
+from collections import defaultdict
+from utils import *
 
 def test(parser, buckets, test_file, output_file):
     results = list()
@@ -28,6 +31,7 @@ def test(parser, buckets, test_file, output_file):
 if __name__ == '__main__':
     parser = OptionParser()
     parser.add_option("--train", dest="conll_train", help="Annotated CONLL train file", metavar="FILE", default=None)
+    parser.add_option("--par", dest="par", help="Paralell data directory", metavar="FILE", default=None)
     parser.add_option("--dev", dest="conll_dev", help="Annotated CONLL dev file", metavar="FILE", default=None)
     parser.add_option("--test", dest="conll_test", help="Annotated CONLL test file", metavar="FILE", default=None)
     parser.add_option("--output", dest="conll_output",  metavar="FILE", default=None)
@@ -85,21 +89,52 @@ if __name__ == '__main__':
         print 'Finished predicting test.', te-ts, 'seconds.'
     else:
         print 'reading shared model'
-        with open(options.netfile, 'r') as paramsfp:
-            chars, lang2id, net_options, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params, lang_lookup_params = pickle.load(paramsfp)
-
         universal_tags = ['ADJ', 'ADP', 'ADV', 'AUX', 'CCONJ', 'DET', 'INTJ', 'NOUN', 'NUM', 'PART', 'PRON', 'PROPN',
                           'PUNCT', 'SCONJ', 'SYM', 'VERB', 'X']
+        par_data = Data(options.par, universal_tags)
+
+        words = defaultdict(set)
+        if par_data:
+            for lang in par_data.neg_examples.keys():
+                for word in par_data.neg_examples[lang]:
+                    words[lang].add(word)
+
+        if options.conll_train:
+            with open(options.conll_train, 'r') as conllFP:
+                for sentence in read_conll(conllFP):
+                    for node in sentence:
+                        if isinstance(node, ConllEntry):
+                            words[node.lang_id].add(node.form)
+        if options.conll_dev:
+            with open(options.conll_dev, 'r') as conllFP:
+                for sentence in read_conll(conllFP):
+                    for node in sentence:
+                        if isinstance(node, ConllEntry):
+                            words[node.lang_id].add(node.form)
+        if options.conll_test:
+            with open(options.conll_test, 'r') as conllFP:
+                for sentence in read_conll(conllFP):
+                    for node in sentence:
+                        if isinstance(node, ConllEntry):
+                            words[node.lang_id].add(node.form)
+
+        chars = dict()
+        for lang in words.keys():
+            ch = set()
+            for word in words[lang]:
+                for c in word:
+                    ch.add(c)
+            chars[lang] = sorted(list(ch))
 
         print 'Preparing vocab'
         rels = utils.vocab(options.conll_train)
         if not os.path.isdir(options.output): os.mkdir(options.output)
         with open(os.path.join(options.output, options.params), 'w') as paramsfp:
-            pickle.dump((rels, options), paramsfp)
+            pickle.dump((words, chars, rels, options), paramsfp)
         print 'Finished collecting vocab'
 
         print 'Initializing lstm mstparser:'
-        parser = mstlstm.MSTParserLSTM(universal_tags, rels, options, chars, lang2id, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params, lang_lookup_params, net_options)
+        parser = mstlstm.MSTParserLSTM(universal_tags, rels, options, words, chars, par_data)
         best_acc = -float('inf')
         t, epoch = 0,1
         train_data = list(utils.read_conll(open(options.conll_train, 'r')))
@@ -116,12 +151,19 @@ if __name__ == '__main__':
                 dev_buckets[0].append(d)
         best_las = 0
         no_improvement = 0
+        errors = []
         while t<=options.t:
             print 'Starting epoch', epoch, 'time:', time.ctime()
             mini_batches = utils.get_batches(buckets, parser, True)
             start, closs = time.time(), 0
             for i, minibatch in enumerate(mini_batches):
                 t, loss = parser.build_graph(minibatch, t, True)
+                mb = par_data.get_next_batch(parser, options.batch, options.neg_num)
+                errors.append(parser.train(mb, t > options.lm_iter))
+                if len(errors) >= 100 or t == 1:
+                    print '%, loss', sum(errors) / len(errors)
+                    errors = []
+
                 if parser.options.anneal:
                     decay_steps = min(1.0, float(t) / 50000)
                     lr = parser.options.lr * 0.75 ** decay_steps

@@ -176,4 +176,5 @@ class Data:
         masks = np.array([np.array([1 if 0 < j < len(all_batches[i][0]) else 0 for i in range(len(all_batches))])
                           for j in range(cur_len)])
         mini_batch = (pwords, pos, chars, langs_in_batch, signs, positions, batch_num, char_batches, masks)
+        print '\/\/\/', chars.keys()
         return mini_batch

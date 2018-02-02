@@ -97,10 +97,9 @@ if __name__ == '__main__':
         te = time.time()
         print 'Finished predicting test.', te-ts, 'seconds.'
     else:
-        print 'reading shared model'
-
         words = defaultdict(set)
         if options.joint:
+            print 'reading shared model'
             par_data = Data(options.par, universal_tags)
             if par_data:
                 for lang in par_data.neg_examples.keys():
@@ -169,7 +168,7 @@ if __name__ == '__main__':
                 if options.joint:
                     mb = par_data.get_next_batch(parser, options.par_batch, options.neg_num)
                     errors.append(parser.train_shared_rnn(mb, True)) #todo
-                if len(errors) >= 100 or t == 1:
+                if len(errors) >= 100:
                     print '%, loss', sum(errors) / len(errors)
                     errors = []
 

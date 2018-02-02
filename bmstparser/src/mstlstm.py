@@ -8,7 +8,7 @@ import codecs, os, sys, math
 from linalg import *
 
 class MSTParserLSTM:
-    def __init__(self, pos, rels, options, words, chars, model_path = None):
+    def __init__(self, pos, rels, options, words, chars, model_path=None):
         self.model = dy.Model()
         self.PAD = 1
         self.options = options
@@ -23,8 +23,14 @@ class MSTParserLSTM:
         self.PAD_REL = 0
         edim = options.we
 
+        with open(model_path, 'r') as paramsfp:
+            lang2id, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params, lang_lookup_params, arc_mlp_head_params, arc_mlp_head_b_params, label_mlp_head_params, label_mlp_head_b_params, arc_mlp_dep_params, arc_mlp_dep_params, arc_mlp_dep_b_params, arc_mlp_dep_b_params, label_mlp_dep_params, label_mlp_dep_b_params, w_arc_params, u_label_params = pickle.load(paramsfp)
 
-        self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe))
+        if model_path:
+            self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe), init=dy.NumpyInitializer(plookup_params))
+        else:
+            self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe))
+
         self.chars = dict()
         self.evocab = dict()
         self.clookup = dict()
@@ -52,11 +58,28 @@ class MSTParserLSTM:
             self.chars[lang] = {c: i + 2 for i, c in enumerate(chars[lang])}
 
             print 'Loaded vector', edim, 'and', len(external_embedding[lang]), 'for', lang
-            self.clookup[lang] = self.model.add_lookup_parameters((len(chars[lang]) + 2, options.ce))
+            if model_path:
+                self.clookup[lang] = self.model.add_lookup_parameters((len(chars[lang]) + 2, options.ce), init=dy.NumpyInitializer(clookup_params[lang]))
+            else:
+                self.clookup[lang] = self.model.add_lookup_parameters((len(chars[lang]) + 2, options.ce))
+
             if not options.tune_net: self.clookup[lang].set_updated(False)
 
             self.char_lstm[lang] = dy.BiRNNBuilder(1, options.ce, edim, self.model, dy.VanillaLSTMBuilder)
-            self.proj_mat[lang] = self.model.add_parameters((edim + options.pe, edim + options.pe))
+            if model_path:
+                for i in range(len(self.char_lstm[lang].builder_layers)):
+                    builder = self.char_lstm[lang].builder_layers[i]
+                    params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
+                    for j in range(len(params)):
+                        params[j].set_value(char_lstm_params[lang][i][j])
+                        if not options.tune_net: params[j].set_updated(False)
+
+            if model_path:
+                self.proj_mat[lang] = self.model.add_parameters((edim + options.pe, edim + options.pe),
+                                                                init=dy.NumpyInitializer(proj_mat_params[lang]))
+            else:
+                self.proj_mat[lang] = self.model.add_parameters((edim + options.pe, edim + options.pe))
+
 
             if not options.tune_net: self.proj_mat[lang].set_updated(False)
 
@@ -70,30 +93,57 @@ class MSTParserLSTM:
                 self.elookup.init_row(self.evocab[lang][word], external_embedding[lang][word])
 
         self.lang2id = {lang: i for i, lang in enumerate(sorted(list(words.keys())))}
-        self.lang_lookup = self.model.add_lookup_parameters((len(self.lang2id), options.le))
+        if model_path:
+            self.lang_lookup = self.model.add_lookup_parameters((len(lang2id), options.le), init=dy.NumpyInitializer(lang_lookup_params))
+        else:
+            self.lang_lookup = self.model.add_lookup_parameters((len(lang2id), options.le))
 
-        self.lang_lookup = self.model.add_lookup_parameters((len(self.lang2id), options.le))
         input_dim = edim + options.pe if self.options.use_pos else edim
 
         self.deep_lstms = dy.BiRNNBuilder(options.layer, input_dim + options.le, options.rnn * 2, self.model, dy.VanillaLSTMBuilder)
-        for i in range(len(self.deep_lstms.builder_layers)):
-            builder = self.deep_lstms.builder_layers[i]
-            b0 = orthonormal_VanillaLSTMBuilder(builder[0], builder[0].spec[1], builder[0].spec[2])
-            b1 = orthonormal_VanillaLSTMBuilder(builder[1], builder[1].spec[1], builder[1].spec[2])
-            self.deep_lstms.builder_layers[i] = (b0, b1)
+        if not model_path:
+            for i in range(len(self.deep_lstms.builder_layers)):
+                builder = self.deep_lstms.builder_layers[i]
+                b0 = orthonormal_VanillaLSTMBuilder(builder[0], builder[0].spec[1], builder[0].spec[2])
+                b1 = orthonormal_VanillaLSTMBuilder(builder[1], builder[1].spec[1], builder[1].spec[2])
+                self.deep_lstms.builder_layers[i] = (b0, b1)
+        else:
+            for i in range(len(self.deep_lstms.builder_layers)):
+                builder = self.deep_lstms.builder_layers[i]
+                params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
+                for j in range(len(params)):
+                    params[j].set_value(deep_lstm_params[i][j])
+                    if not options.tune_net: params[j].set_updated(False)
 
         w_mlp_arc = orthonormal_initializer(options.arc_mlp, options.rnn * 2)
         w_mlp_label = orthonormal_initializer(options.label_mlp, options.rnn * 2)
-        self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init= dy.NumpyInitializer(w_mlp_arc))
-        self.arc_mlp_head_b = self.model.add_parameters((options.arc_mlp,), init = dy.ConstInitializer(0))
-        self.label_mlp_head = self.model.add_parameters((options.label_mlp, options.rnn * 2), init= dy.NumpyInitializer(w_mlp_label))
-        self.label_mlp_head_b = self.model.add_parameters((options.label_mlp,), init = dy.ConstInitializer(0))
-        self.arc_mlp_dep = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init= dy.NumpyInitializer(w_mlp_arc))
-        self.arc_mlp_dep_b = self.model.add_parameters((options.arc_mlp,), init = dy.ConstInitializer(0))
-        self.label_mlp_dep = self.model.add_parameters((options.label_mlp, options.rnn * 2), init= dy.NumpyInitializer(w_mlp_label))
-        self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init = dy.ConstInitializer(0))
-        self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp+1), init = dy.ConstInitializer(0))
-        self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp+1), options.label_mlp+1), init = dy.ConstInitializer(0))
+        if not model_path:
+            self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init= dy.NumpyInitializer(w_mlp_arc))
+            self.arc_mlp_head_b = self.model.add_parameters((options.arc_mlp,), init = dy.ConstInitializer(0))
+            self.label_mlp_head = self.model.add_parameters((options.label_mlp, options.rnn * 2), init= dy.NumpyInitializer(w_mlp_label))
+            self.label_mlp_head_b = self.model.add_parameters((options.label_mlp,), init = dy.ConstInitializer(0))
+            self.arc_mlp_dep = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init= dy.NumpyInitializer(w_mlp_arc))
+            self.arc_mlp_dep_b = self.model.add_parameters((options.arc_mlp,), init = dy.ConstInitializer(0))
+            self.label_mlp_dep = self.model.add_parameters((options.label_mlp, options.rnn * 2), init= dy.NumpyInitializer(w_mlp_label))
+            self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init = dy.ConstInitializer(0))
+            self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp+1), init = dy.ConstInitializer(0))
+            self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp+1), options.label_mlp+1), init = dy.ConstInitializer(0))
+        else:
+            self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2),
+                                                          init=dy.NumpyInitializer(arc_mlp_head_params))
+            self.arc_mlp_head_b = self.model.add_parameters((options.arc_mlp,), init=dy.NumpyInitializer(arc_mlp_head_b_params))
+            self.label_mlp_head = self.model.add_parameters((options.label_mlp, options.rnn * 2),
+                                                            init=dy.NumpyInitializer(label_mlp_head_params))
+            self.label_mlp_head_b = self.model.add_parameters((options.label_mlp,), init=dy.NumpyInitializer(label_mlp_head_b_params))
+            self.arc_mlp_dep = self.model.add_parameters((options.arc_mlp, options.rnn * 2),
+                                                         init=dy.NumpyInitializer(arc_mlp_dep_params))
+            self.arc_mlp_dep_b = self.model.add_parameters((options.arc_mlp,), init=dy.NumpyInitializer(arc_mlp_dep_b_params))
+            self.label_mlp_dep = self.model.add_parameters((options.label_mlp, options.rnn * 2),
+                                                           init=dy.NumpyInitializer(label_mlp_dep_params))
+            self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init=dy.NumpyInitializer(label_mlp_dep_b_params))
+            self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp + 1), init=dy.NumpyInitializer(w_arc_params))
+            self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp + 1), options.label_mlp + 1),
+                                                     init=dy.NumpyInitializer(u_label_params))
 
         self.lm_w = self.model.add_parameters((2, options.rnn * 2))
         self.lm_b = self.model.add_parameters((2,), init=dy.ConstInitializer(-math.log(2)))

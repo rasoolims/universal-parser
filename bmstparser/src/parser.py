@@ -84,8 +84,7 @@ if __name__ == '__main__':
         stored_opt.external_embedding = options.external_embedding
         print stored_opt
         print 'Initializing lstm mstparser:'
-        parser = mstlstm.MSTParserLSTM(universal_tags, rels, stored_opt, words, chars)
-        parser.load(options.model)
+        parser = mstlstm.MSTParserLSTM(universal_tags, rels, stored_opt, words, chars, options.model)
         ts = time.time()
         print 'loading buckets'
         test_buckets = [list()]

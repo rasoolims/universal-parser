@@ -306,8 +306,8 @@ class MSTParserLSTM:
                 b1 = batch_num[b][i]
                 vec1 = t_outs[pos1][b1]
 
-                lm_out = dy.affine_transform([self.lm_b.expr(), self.lm_w.expr(), vec1])
-                loss_values.append(dy.pickneglogsoftmax(lm_out, signs[b][i]))
+                #lm_out = dy.affine_transform([self.lm_b.expr(), self.lm_w.expr(), vec1])
+                #loss_values.append(dy.pickneglogsoftmax(lm_out, signs[b][i]))
                 if train_both:
                     for j in range(i + 1, len(batch_num[b])):
                         lang2 = langs[b][j]

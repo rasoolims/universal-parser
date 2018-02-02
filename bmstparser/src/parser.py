@@ -72,14 +72,17 @@ if __name__ == '__main__':
 
     (options, args) = parser.parse_args()
     print options
+    universal_tags = ['ADJ', 'ADP', 'ADV', 'AUX', 'CCONJ', 'DET', 'INTJ', 'NOUN', 'NUM', 'PART', 'PRON', 'PROPN',
+                      'PUNCT', 'SCONJ', 'SYM', 'VERB', 'X']
+
     print 'Using external embedding:', options.external_embedding
     if options.predictFlag:
         with open(options.params, 'r') as paramsfp:
-            w2i, pos, rels, chars, stored_opt = pickle.load(paramsfp)
+            words, chars, rels, stored_opt = pickle.load(paramsfp)
         stored_opt.external_embedding = options.external_embedding
         print stored_opt
         print 'Initializing lstm mstparser:'
-        parser = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, stored_opt)
+        parser = mstlstm.MSTParserLSTM(universal_tags, rels, stored_opt, words, chars)
         parser.load(options.model)
         ts = time.time()
         print 'loading buckets'
@@ -93,8 +96,7 @@ if __name__ == '__main__':
         print 'Finished predicting test.', te-ts, 'seconds.'
     else:
         print 'reading shared model'
-        universal_tags = ['ADJ', 'ADP', 'ADV', 'AUX', 'CCONJ', 'DET', 'INTJ', 'NOUN', 'NUM', 'PART', 'PRON', 'PROPN',
-                          'PUNCT', 'SCONJ', 'SYM', 'VERB', 'X']
+
         par_data = Data(options.par, universal_tags)
 
         words = defaultdict(set)

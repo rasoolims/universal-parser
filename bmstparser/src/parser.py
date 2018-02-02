@@ -69,6 +69,8 @@ if __name__ == '__main__':
     parser.add_option("--par_batch", type="int", dest="par_batch", default=20)
     parser.add_option("--le", type="int", dest="le", help="language embedding", default=25)
     parser.add_option("--lm_iter", type="int", dest="lm_iter", help="number of pretraining iterations for LM", default=200)
+    parser.add_option("--joint", action="store_true", dest="joint", default=False)
+
 
     (options, args) = parser.parse_args()
     print options
@@ -97,13 +99,13 @@ if __name__ == '__main__':
     else:
         print 'reading shared model'
 
-        par_data = Data(options.par, universal_tags)
-
         words = defaultdict(set)
-        if par_data:
-            for lang in par_data.neg_examples.keys():
-                for word in par_data.neg_examples[lang]:
-                    words[lang].add(word)
+        if options.joint:
+            par_data = Data(options.par, universal_tags)
+            if par_data:
+                for lang in par_data.neg_examples.keys():
+                    for word in par_data.neg_examples[lang]:
+                        words[lang].add(word)
 
         if options.conll_train:
             with open(options.conll_train, 'r') as conllFP:
@@ -164,8 +166,9 @@ if __name__ == '__main__':
             start, closs = time.time(), 0
             for i, minibatch in enumerate(mini_batches):
                 t, loss = parser.build_graph(minibatch, t, True)
-                mb = par_data.get_next_batch(parser, options.par_batch, options.neg_num)
-                errors.append(parser.train_shared_rnn(mb, True)) #todo
+                if options.joint:
+                    mb = par_data.get_next_batch(parser, options.par_batch, options.neg_num)
+                    errors.append(parser.train_shared_rnn(mb, True)) #todo
                 if len(errors) >= 100 or t == 1:
                     print '%, loss', sum(errors) / len(errors)
                     errors = []

@@ -2,13 +2,13 @@ import dynet as dy
 from utils import read_conll, write_conll, ConllEntry
 from collections import defaultdict
 from operator import itemgetter
-import time, random, decoder, gzip
+import time, random, decoder, gzip, pickle
 import numpy as np
 import codecs, os, sys, math
 from linalg import *
 
 class MSTParserLSTM:
-    def __init__(self, pos, rels, options, words, chars):
+    def __init__(self, pos, rels, options, words, chars, model_path = None):
         self.model = dy.Model()
         self.PAD = 1
         self.options = options
@@ -22,6 +22,7 @@ class MSTParserLSTM:
         self.irels = ['PAD'] + rels
         self.PAD_REL = 0
         edim = options.we
+
 
         self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe))
         self.chars = dict()
@@ -143,8 +144,6 @@ class MSTParserLSTM:
         h, m =  dy.transpose(H2),  dy.transpose(M2)
         return dy.reshape( dy.transpose(h[i]) * self.u_label.expr(), (len(self.irels), self.options.label_mlp+1)) * m[j]
 
-    def save(self, filename):
-        self.model.save(filename)
 
     def load(self, filename):
         self.model.populate(filename)
@@ -345,3 +344,56 @@ class MSTParserLSTM:
             self.trainer.update()
         dy.renew_cg()
         return err_value
+
+    def save(self, path):
+        with open(path, 'w') as paramsfp:
+            deep_lstm_params = []
+            for i in range(len(self.deep_lstms.builder_layers)):
+                builder = self.deep_lstms.builder_layers[i]
+                params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
+                d_par = dict()
+                for j in range(len(params)):
+                    d_par[j] = params[j].expr().npvalue()
+                deep_lstm_params.append(d_par)
+
+            char_lstm_params = dict()
+            for lang in self.char_lstm.keys():
+                char_lstm_params[lang] = []
+                for i in range(len(self.char_lstm[lang].builder_layers)):
+                    builder = self.char_lstm[lang].builder_layers[i]
+                    params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
+                    d_par = dict()
+                    for j in range(len(params)):
+                        d_par[j] = params[j].expr().npvalue()
+                    char_lstm_params[lang].append(d_par)
+
+            proj_mat_params = dict()
+            for lang in self.proj_mat.keys():
+                proj_mat_params[lang] = self.proj_mat[lang].expr().npvalue()
+
+            clookup_params = dict()
+            for lang in self.clookup.keys():
+                clookup_params[lang] = self.clookup[lang].expr().npvalue()
+
+            plookup_params = self.plookup.expr().npvalue()
+            lang_lookup_params = self.lang_lookup.expr().npvalue()
+
+            arc_mlp_head_params = self.arc_mlp_head.expr().npvalue()
+            arc_mlp_head_b_params = self.arc_mlp_head_b.expr().npvalue()
+            label_mlp_head_params = self.label_mlp_head.expr().npvalue()
+            label_mlp_head_b_params = self.label_mlp_head_b.expr().npvalue()
+            arc_mlp_dep_params = self.arc_mlp_dep.expr().npvalue()
+            arc_mlp_dep_b_params = self.arc_mlp_dep_b.expr().npvalue()
+            label_mlp_dep_params = self.label_mlp_dep.expr().npvalue()
+            label_mlp_dep_b_params = self.label_mlp_dep_b.expr().npvalue()
+            w_arc_params = self.w_arc.expr().npvalue()
+            u_label_params = self.u_label.expr().npvalue()
+            pickle.dump((self.lang2id, deep_lstm_params, char_lstm_params, clookup_params,
+                         proj_mat_params, plookup_params, lang_lookup_params, arc_mlp_head_params,
+                         arc_mlp_head_b_params, label_mlp_head_params, label_mlp_head_b_params, arc_mlp_dep_params,
+                         arc_mlp_dep_params, arc_mlp_dep_b_params, arc_mlp_dep_b_params, label_mlp_dep_params,
+                         label_mlp_dep_b_params, w_arc_params, u_label_params), paramsfp)
+
+    # def load(self, path):
+    #     with open(path, 'r') as paramsfp:
+    #         return pickle.load(paramsfp)

@@ -95,9 +95,9 @@ class MSTParserLSTM:
 
         self.lang2id = {lang: i for i, lang in enumerate(sorted(list(words.keys())))}
         if model_path:
-            self.lang_lookup = self.model.add_lookup_parameters((len(lang2id), options.le), init=dy.NumpyInitializer(lang_lookup_params))
+            self.lang_lookup = self.model.add_lookup_parameters((len(self.lang2id), options.le), init=dy.NumpyInitializer(lang_lookup_params))
         else:
-            self.lang_lookup = self.model.add_lookup_parameters((len(lang2id), options.le))
+            self.lang_lookup = self.model.add_lookup_parameters((len(self.lang2id), options.le))
 
         input_dim = edim + options.pe if self.options.use_pos else edim
 

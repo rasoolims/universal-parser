@@ -146,10 +146,10 @@ class MSTParserLSTM:
             self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp + 1), options.label_mlp + 1),
                                                      init=dy.NumpyInitializer(u_label_params))
 
-        self.lm_w = self.model.add_parameters((2, options.arc_mlp + 1))
+        self.lm_w = self.model.add_parameters((2, options.arc_mlp))
         self.lm_b = self.model.add_parameters((2,), init=dy.ConstInitializer(-math.log(2)))
 
-        self.lmL_w = self.model.add_parameters((2, options.label_mlp + 1))
+        self.lmL_w = self.model.add_parameters((2, options.label_mlp))
         self.lmL_b = self.model.add_parameters((2,), init=dy.ConstInitializer(-math.log(2)))
 
         def _emb_mask_generator(seq_len, batch_size):

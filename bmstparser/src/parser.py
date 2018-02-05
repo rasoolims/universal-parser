@@ -80,6 +80,8 @@ if __name__ == '__main__':
     print 'Using external embedding:', options.external_embedding
     if options.predictFlag:
         with open(options.params, 'r') as paramsfp:
+            print pickle.load(paramsfp)
+        with open(options.params, 'r') as paramsfp:
             words, chars, rels, stored_opt = pickle.load(paramsfp)
         words = defaultdict(set)
         with open(options.conll_test, 'r') as conllFP:

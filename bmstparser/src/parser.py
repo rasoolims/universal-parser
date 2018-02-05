@@ -80,7 +80,10 @@ if __name__ == '__main__':
     print 'Using external embedding:', options.external_embedding
     if options.predictFlag:
         with open(options.params, 'r') as paramsfp:
-            print pickle.load(paramsfp)
+            x = pickle.load(paramsfp)
+            print len(x)
+            for y in x:
+                print type(y)
         with open(options.params, 'r') as paramsfp:
             words, chars, rels, stored_opt = pickle.load(paramsfp)
         words = defaultdict(set)

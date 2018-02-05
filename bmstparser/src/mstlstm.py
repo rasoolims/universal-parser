@@ -23,8 +23,9 @@ class MSTParserLSTM:
         self.PAD_REL = 0
         edim = options.we
 
-        with open(model_path, 'r') as paramsfp:
-            lang2id, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params, lang_lookup_params, arc_mlp_head_params, arc_mlp_head_b_params, label_mlp_head_params, label_mlp_head_b_params, arc_mlp_dep_params, arc_mlp_dep_params, arc_mlp_dep_b_params, arc_mlp_dep_b_params, label_mlp_dep_params, label_mlp_dep_b_params, w_arc_params, u_label_params = pickle.load(paramsfp)
+        if model_path:
+            with open(model_path, 'r') as paramsfp:
+                lang2id, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params, lang_lookup_params, arc_mlp_head_params, arc_mlp_head_b_params, label_mlp_head_params, label_mlp_head_b_params, arc_mlp_dep_params, arc_mlp_dep_params, arc_mlp_dep_b_params, arc_mlp_dep_b_params, label_mlp_dep_params, label_mlp_dep_b_params, w_arc_params, u_label_params = pickle.load(paramsfp)
 
         if model_path:
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe), init=dy.NumpyInitializer(plookup_params))

@@ -109,19 +109,6 @@ class Data:
         c_len[dst_lang] = max(c_len[dst_lang], max([len(w) for w in dst_words]))
         batch[src_lang].append((src_words, src_tags, src_lang, 1, src_position, b))
         batch[dst_lang].append((dst_words, dst_tags, dst_lang, 1, dst_position, b))
-        for r in range(neg_num):
-            src_neg_tag = self.pos_tags[random.randint(0, len(self.pos_tags) - 1)]
-            dst_neg_tag = self.pos_tags[random.randint(0, len(self.pos_tags) - 1)]
-            src_neg_word = self.neg_examples[src_lang][random.randint(0, len(self.neg_examples[src_lang]) - 1)]
-            dst_neg_word = self.neg_examples[dst_lang][random.randint(0, len(self.neg_examples[dst_lang]) - 1)]
-            c_len[src_lang] = max(c_len[src_lang], len(src_neg_word))
-            c_len[dst_lang] = max(c_len[dst_lang], len(dst_neg_word))
-            src_neg_words = src_words[:src_position] + [src_neg_word] + src_words[src_position + 1:]
-            dst_neg_words = dst_words[:dst_position] + [dst_neg_word] + dst_words[dst_position + 1:]
-            src_neg_tags = src_tags[:src_position] + [src_neg_tag] + src_tags[src_position + 1:]
-            dst_neg_tags = dst_tags[:dst_position] + [dst_neg_tag] + dst_tags[dst_position + 1:]
-            batch[src_lang].append((src_neg_words, src_neg_tags, src_lang, 0, src_position, b))
-            batch[dst_lang].append((dst_neg_words, dst_neg_tags, dst_lang, 0, dst_position, b))
         return w_len
 
     def get_minibatch(self, batch, cur_c_len, cur_len, model):

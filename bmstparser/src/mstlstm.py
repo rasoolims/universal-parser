@@ -146,8 +146,11 @@ class MSTParserLSTM:
             self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp + 1), options.label_mlp + 1),
                                                      init=dy.NumpyInitializer(u_label_params))
 
-        self.lm_w = self.model.add_parameters((2, options.rnn * 2))
+        self.lm_w = self.model.add_parameters((2, options.arc_mlp + 1))
         self.lm_b = self.model.add_parameters((2,), init=dy.ConstInitializer(-math.log(2)))
+
+        self.lmL_w = self.model.add_parameters((2, options.label_mlp + 1))
+        self.lmL_b = self.model.add_parameters((2,), init=dy.ConstInitializer(-math.log(2)))
 
         def _emb_mask_generator(seq_len, batch_size):
             ret = []
@@ -373,6 +376,18 @@ class MSTParserLSTM:
                 HLVec1 = HL_i[pos1][b1]
                 MLVec1 = ML_i[pos1][b1]
 
+                lm_out = dy.affine_transform([self.lm_b.expr(), self.lm_w.expr(), HVec1])
+                loss_values.append(dy.pickneglogsoftmax(lm_out, signs[b][i]))
+
+                lm_out = dy.affine_transform([self.lm_b.expr(), self.lm_w.expr(), MVec1])
+                loss_values.append(dy.pickneglogsoftmax(lm_out, signs[b][i]))
+
+                lm_out = dy.affine_transform([self.lmL_b.expr(), self.lmL_w.expr(), HLVec1])
+                loss_values.append(dy.pickneglogsoftmax(lm_out, signs[b][i]))
+
+                lm_out = dy.affine_transform([self.lmL_b.expr(), self.lmL_w.expr(), MLVec1])
+                loss_values.append(dy.pickneglogsoftmax(lm_out, signs[b][i]))
+
                 for j in range(i + 1, len(batch_num[b])):
                     lang2 = langs[b][j]
                     pos2 = positions[b][j]
@@ -383,65 +398,83 @@ class MSTParserLSTM:
                         HLVec2 = HL_i[pos2][b2]
                         MLVec2 = ML_i[pos2][b2]
 
-                        ps_loss = -dy.sqrt(dy.squared_distance(HVec1, HVec2))
-                        term = -dy.log(dy.logistic(ps_loss))
-                        loss_values.append(term)
+                        if signs[b][i] == signs[b][j] == 1:
+                            ps_loss = -dy.sqrt(dy.squared_distance(HVec1, HVec2))
+                            term = -dy.log(dy.logistic(ps_loss))
+                            loss_values.append(term)
 
-                        ps_loss = -dy.sqrt(dy.squared_distance(MVec1, MVec2))
-                        term = -dy.log(dy.logistic(ps_loss))
-                        loss_values.append(term)
+                            ps_loss = -dy.sqrt(dy.squared_distance(MVec1, MVec2))
+                            term = -dy.log(dy.logistic(ps_loss))
+                            loss_values.append(term)
 
-                        ps_loss = -dy.sqrt(dy.squared_distance(HLVec1, HLVec2))
-                        term = -dy.log(dy.logistic(ps_loss))
-                        loss_values.append(term)
+                            ps_loss = -dy.sqrt(dy.squared_distance(HLVec1, HLVec2))
+                            term = -dy.log(dy.logistic(ps_loss))
+                            loss_values.append(term)
 
-                        ps_loss = -dy.sqrt(dy.squared_distance(MLVec1, MLVec2))
-                        term = -dy.log(dy.logistic(ps_loss))
-                        loss_values.append(term)
+                            ps_loss = -dy.sqrt(dy.squared_distance(MLVec1, MLVec2))
+                            term = -dy.log(dy.logistic(ps_loss))
+                            loss_values.append(term)
 
-                        # alignment-based negative position.
-                        for _ in range(5):
-                            s_neg_position, t_neg_position = random.randint(0, last_pos), random.randint(0, last_pos)
-                            if s_neg_position != pos1:
-                                s_vec = H_i[s_neg_position][b1]
-                                d_s = dy.sqrt(dy.squared_distance(s_vec, HVec2))
-                                term = -dy.log(dy.logistic(-d_s))
-                                loss_values.append(term)
+                            # alignment-based negative position.
+                            for _ in range(5):
+                                s_neg_position, t_neg_position = random.randint(0, last_pos), random.randint(0, last_pos)
+                                if s_neg_position != pos1:
+                                    s_vec = H_i[s_neg_position][b1]
+                                    d_s = dy.sqrt(dy.squared_distance(s_vec, HVec2))
+                                    term = -dy.log(dy.logistic(-d_s))
+                                    loss_values.append(term)
 
-                                s_vec = M_i[s_neg_position][b1]
-                                d_s = dy.sqrt(dy.squared_distance(s_vec, MVec2))
-                                term = -dy.log(dy.logistic(-d_s))
-                                loss_values.append(term)
+                                    s_vec = M_i[s_neg_position][b1]
+                                    d_s = dy.sqrt(dy.squared_distance(s_vec, MVec2))
+                                    term = -dy.log(dy.logistic(-d_s))
+                                    loss_values.append(term)
 
-                                s_vec = HL_i[s_neg_position][b1]
-                                d_s = dy.sqrt(dy.squared_distance(s_vec, HLVec2))
-                                term = -dy.log(dy.logistic(-d_s))
-                                loss_values.append(term)
+                                    s_vec = HL_i[s_neg_position][b1]
+                                    d_s = dy.sqrt(dy.squared_distance(s_vec, HLVec2))
+                                    term = -dy.log(dy.logistic(-d_s))
+                                    loss_values.append(term)
 
-                                s_vec = ML_i[s_neg_position][b1]
-                                d_s = dy.sqrt(dy.squared_distance(s_vec, MLVec2))
-                                term = -dy.log(dy.logistic(-d_s))
-                                loss_values.append(term)
-                            if t_neg_position != pos2:
-                                t_vec = H_i[t_neg_position][b2]
-                                d_t = dy.sqrt(dy.squared_distance(HVec1, t_vec))
-                                term = -dy.log(dy.logistic(-d_t))
-                                loss_values.append(term)
+                                    s_vec = ML_i[s_neg_position][b1]
+                                    d_s = dy.sqrt(dy.squared_distance(s_vec, MLVec2))
+                                    term = -dy.log(dy.logistic(-d_s))
+                                    loss_values.append(term)
+                                if t_neg_position != pos2:
+                                    t_vec = H_i[t_neg_position][b2]
+                                    d_t = dy.sqrt(dy.squared_distance(HVec1, t_vec))
+                                    term = -dy.log(dy.logistic(-d_t))
+                                    loss_values.append(term)
 
-                                t_vec = M_i[t_neg_position][b2]
-                                d_t = dy.sqrt(dy.squared_distance(MVec1, t_vec))
-                                term = -dy.log(dy.logistic(-d_t))
-                                loss_values.append(term)
+                                    t_vec = M_i[t_neg_position][b2]
+                                    d_t = dy.sqrt(dy.squared_distance(MVec1, t_vec))
+                                    term = -dy.log(dy.logistic(-d_t))
+                                    loss_values.append(term)
 
-                                t_vec = HL_i[t_neg_position][b2]
-                                d_t = dy.sqrt(dy.squared_distance(HLVec1, t_vec))
-                                term = -dy.log(dy.logistic(-d_t))
-                                loss_values.append(term)
+                                    t_vec = HL_i[t_neg_position][b2]
+                                    d_t = dy.sqrt(dy.squared_distance(HLVec1, t_vec))
+                                    term = -dy.log(dy.logistic(-d_t))
+                                    loss_values.append(term)
 
-                                t_vec = ML_i[t_neg_position][b2]
-                                d_t = dy.sqrt(dy.squared_distance(MLVec1, t_vec))
-                                term = -dy.log(dy.logistic(-d_t))
-                                loss_values.append(term)
+                                    t_vec = ML_i[t_neg_position][b2]
+                                    d_t = dy.sqrt(dy.squared_distance(MLVec1, t_vec))
+                                    term = -dy.log(dy.logistic(-d_t))
+                                    loss_values.append(term)
+
+                        elif signs[b][i] == 1 or signs[b][j] == 1:
+                            ps_loss = -dy.sqrt(dy.squared_distance(HVec1, HVec2))
+                            term = -dy.log(dy.logistic(-ps_loss))
+                            loss_values.append(term)
+
+                            ps_loss = -dy.sqrt(dy.squared_distance(MVec1, MVec2))
+                            term = -dy.log(dy.logistic(-ps_loss))
+                            loss_values.append(term)
+
+                            ps_loss = -dy.sqrt(dy.squared_distance(HLVec1, HLVec2))
+                            term = -dy.log(dy.logistic(-ps_loss))
+                            loss_values.append(term)
+
+                            ps_loss = -dy.sqrt(dy.squared_distance(MLVec1, MLVec2))
+                            term = -dy.log(dy.logistic(-ps_loss))
+                            loss_values.append(term)
 
         err_value = 0
         if len(loss_values) > 0:

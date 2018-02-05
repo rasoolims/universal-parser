@@ -84,6 +84,8 @@ if __name__ == '__main__':
             print len(x)
             for y in x:
                 print type(y)
+            print x[-1]
+            print x[-2]
         with open(options.params, 'r') as paramsfp:
             words, chars, rels, stored_opt = pickle.load(paramsfp)
         words = defaultdict(set)

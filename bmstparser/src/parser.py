@@ -81,12 +81,12 @@ if __name__ == '__main__':
     if options.predictFlag:
         with open(options.params, 'r') as paramsfp:
             words, chars, rels, stored_opt = pickle.load(paramsfp)
-        # words = defaultdict(set)
-        # with open(options.conll_test, 'r') as conllFP:
-        #     for sentence in read_conll(conllFP):
-        #         for node in sentence:
-        #             if isinstance(node, ConllEntry):
-        #                 words[node.lang_id].add(node.form)
+        words = defaultdict(set)
+        with open(options.conll_test, 'r') as conllFP:
+            for sentence in read_conll(conllFP):
+                for node in sentence:
+                    if isinstance(node, ConllEntry):
+                        words[node.lang_id].add(node.form)
 
         stored_opt.external_embedding = options.external_embedding
         print stored_opt

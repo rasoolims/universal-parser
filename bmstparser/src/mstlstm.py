@@ -27,6 +27,14 @@ class MSTParserLSTM:
             with open(model_path, 'r') as paramsfp:
                 lang2id, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params, lang_lookup_params, arc_mlp_head_params, arc_mlp_head_b_params, label_mlp_head_params, label_mlp_head_b_params, arc_mlp_dep_params, arc_mlp_dep_params, arc_mlp_dep_b_params, arc_mlp_dep_b_params, label_mlp_dep_params, label_mlp_dep_b_params, w_arc_params, u_label_params = pickle.load(paramsfp)
 
+        self.lang2id = {lang: i for i, lang in enumerate(sorted(list(words.keys())))}
+        print self.lang2id
+        if model_path:
+            self.lang_lookup = self.model.add_lookup_parameters((len(self.lang2id), options.le),
+                                                                init=dy.NumpyInitializer(lang_lookup_params))
+        else:
+            self.lang_lookup = self.model.add_lookup_parameters((len(self.lang2id), options.le))
+            
         if model_path:
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe), init=dy.NumpyInitializer(plookup_params))
         else:
@@ -93,12 +101,7 @@ class MSTParserLSTM:
             for word in external_embedding[lang].keys():
                 self.elookup.init_row(self.evocab[lang][word], external_embedding[lang][word])
 
-        self.lang2id = {lang: i for i, lang in enumerate(sorted(list(words.keys())))}
-        print self.lang2id
-        if model_path:
-            self.lang_lookup = self.model.add_lookup_parameters((len(self.lang2id), options.le), init=dy.NumpyInitializer(lang_lookup_params))
-        else:
-            self.lang_lookup = self.model.add_lookup_parameters((len(self.lang2id), options.le))
+
 
         input_dim = edim + options.pe if self.options.use_pos else edim
 

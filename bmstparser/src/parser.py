@@ -193,8 +193,15 @@ if __name__ == '__main__':
                             print 'saving non-avg with', best_las, uas
                             parser.save(options.output + '/model')
 
-                            tparser = mstlstm.MSTParserLSTM(universal_tags, rels, options, words, chars, options.output + '/model')
-                            uas, las = test(parser, dev_buckets, options.conll_dev, options.output + '/dev.out')
+                            dev_words =defaultdict(set)
+                            with open(options.conll_dev, 'r') as conllFP:
+                                for sentence in read_conll(conllFP):
+                                    for node in sentence:
+                                        if isinstance(node, ConllEntry):
+                                            dev_words[node.lang_id].add(node.form)
+
+                            tparser = mstlstm.MSTParserLSTM(universal_tags, rels, options, dev_words, chars, options.output + '/model')
+                            uas, las = test(tparser, dev_buckets, options.conll_dev, options.output + '/dev.out')
                             print 'dev non-avg test-acc', las, uas
 
                             no_improvement = 0

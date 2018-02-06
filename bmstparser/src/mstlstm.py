@@ -55,15 +55,16 @@ class MSTParserLSTM:
         word_index = 2
         for f in os.listdir(options.external_embedding):
             lang = f[:-3]
-            efp = gzip.open(options.external_embedding + '/' + f, 'r')
-            external_embedding[lang] =  dict()
-            for line in efp:
-                spl = line.strip().split(' ')
-                if len(spl) > 2:
-                    w = spl[0]
-                    if w in words[lang]:
-                        external_embedding[lang][w] = [float(f) for f in spl[1:]]
-            efp.close()
+            external_embedding[lang] = dict()
+            if lang in words:
+                efp = gzip.open(options.external_embedding + '/' + f, 'r')
+                for line in efp:
+                    spl = line.strip().split(' ')
+                    if len(spl) > 2:
+                        w = spl[0]
+                        if w in words[lang]:
+                            external_embedding[lang][w] = [float(f) for f in spl[1:]]
+                efp.close()
 
             self.evocab[lang] = {word: i + word_index for i, word in enumerate(external_embedding[lang])}
             word_index += len(self.evocab[lang])
@@ -93,8 +94,6 @@ class MSTParserLSTM:
                 self.proj_mat[lang] = self.model.add_parameters((edim + options.pe, edim + options.pe), init=dy.NumpyInitializer(proj_mat_params[lang]))
             else:
                 self.proj_mat[lang] = self.model.add_parameters((edim + options.pe, edim + options.pe))
-
-
             if not options.tune_net: self.proj_mat[lang].set_updated(False)
 
         self.elookup = self.model.add_lookup_parameters((word_index, edim))
@@ -123,9 +122,9 @@ class MSTParserLSTM:
                     params[j].set_value(deep_lstm_params[i][j])
                     if not options.tune_net: params[j].set_updated(False)
 
-        w_mlp_arc = orthonormal_initializer(options.arc_mlp, options.rnn * 2)
-        w_mlp_label = orthonormal_initializer(options.label_mlp, options.rnn * 2)
         if not model_path:
+            w_mlp_arc = orthonormal_initializer(options.arc_mlp, options.rnn * 2)
+            w_mlp_label = orthonormal_initializer(options.label_mlp, options.rnn * 2)
             self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init= dy.NumpyInitializer(w_mlp_arc))
             self.arc_mlp_head_b = self.model.add_parameters((options.arc_mlp,), init = dy.ConstInitializer(0))
             self.label_mlp_head = self.model.add_parameters((options.label_mlp, options.rnn * 2), init= dy.NumpyInitializer(w_mlp_label))

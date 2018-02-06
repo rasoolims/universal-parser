@@ -25,7 +25,11 @@ class MSTParserLSTM:
 
         if model_path:
             with open(model_path, 'r') as paramsfp:
-                lang2id, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params, lang_lookup_params, arc_mlp_head_params, arc_mlp_head_b_params, label_mlp_head_params, label_mlp_head_b_params, arc_mlp_dep_params, arc_mlp_dep_params, arc_mlp_dep_b_params, arc_mlp_dep_b_params, label_mlp_dep_params, label_mlp_dep_b_params, w_arc_params, u_label_params = pickle.load(paramsfp)
+                lang2id, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params,\
+                lang_lookup_params, arc_mlp_head_params, arc_mlp_head_b_params, label_mlp_head_params,\
+                label_mlp_head_b_params, arc_mlp_dep_params, arc_mlp_dep_params, arc_mlp_dep_b_params,\
+                arc_mlp_dep_b_params, label_mlp_dep_params, label_mlp_dep_b_params, w_arc_params,\
+                u_label_params = pickle.load(paramsfp)
 
         if model_path:
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe), init=dy.NumpyInitializer(plookup_params))
@@ -86,8 +90,7 @@ class MSTParserLSTM:
                         if not options.tune_net: params[j].set_updated(False)
 
             if model_path:
-                self.proj_mat[lang] = self.model.add_parameters((edim + options.pe, edim + options.pe),
-                                                                init=dy.NumpyInitializer(proj_mat_params[lang]))
+                self.proj_mat[lang] = self.model.add_parameters((edim + options.pe, edim + options.pe), init=dy.NumpyInitializer(proj_mat_params[lang]))
             else:
                 self.proj_mat[lang] = self.model.add_parameters((edim + options.pe, edim + options.pe))
 
@@ -102,8 +105,6 @@ class MSTParserLSTM:
         for lang in self.evocab.keys():
             for word in external_embedding[lang].keys():
                 self.elookup.init_row(self.evocab[lang][word], external_embedding[lang][word])
-
-
 
         input_dim = edim + options.pe if self.options.use_pos else edim
 

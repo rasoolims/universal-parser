@@ -32,7 +32,7 @@ class MSTParserLSTM:
                 u_label_params = pickle.load(paramsfp)
 
         if model_path:
-            self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe), init=dy.NumpyInitializer(plookup_params.T))
+            self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe), init=dy.NumpyInitializer(plookup_params))
         else:
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe))
 

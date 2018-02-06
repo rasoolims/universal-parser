@@ -192,6 +192,11 @@ if __name__ == '__main__':
                             best_las = las
                             print 'saving non-avg with', best_las, uas
                             parser.save(options.output + '/model')
+
+                            tparser = mstlstm.MSTParserLSTM(universal_tags, rels, options, words, chars, options.output + '/model')
+                            uas, las = test(parser, dev_buckets, options.conll_dev, options.output + '/dev.out')
+                            print 'dev non-avg test-acc', las, uas
+
                             no_improvement = 0
                         else:
                             no_improvement += 1

@@ -27,18 +27,20 @@ class MSTParserLSTM:
             with open(model_path, 'r') as paramsfp:
                 lang2id, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params, lang_lookup_params, arc_mlp_head_params, arc_mlp_head_b_params, label_mlp_head_params, label_mlp_head_b_params, arc_mlp_dep_params, arc_mlp_dep_params, arc_mlp_dep_b_params, arc_mlp_dep_b_params, label_mlp_dep_params, label_mlp_dep_b_params, w_arc_params, u_label_params = pickle.load(paramsfp)
 
-        self.lang2id = {lang: i for i, lang in enumerate(sorted(list(words.keys())))}
-        print self.lang2id
-        if model_path:
-            self.lang_lookup = self.model.add_lookup_parameters((len(self.lang2id), options.le),
-                                                                init=dy.NumpyInitializer(lang_lookup_params))
-        else:
-            self.lang_lookup = self.model.add_lookup_parameters((len(self.lang2id), options.le))
-            
         if model_path:
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe), init=dy.NumpyInitializer(plookup_params))
         else:
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe))
+
+
+        if model_path:
+            self.lang2id = lang2id
+            self.lang_lookup = self.model.add_lookup_parameters((len(self.lang2id), options.le),
+                                                                init=dy.NumpyInitializer(lang_lookup_params))
+        else:
+            self.lang2id = {lang: i for i, lang in enumerate(sorted(list(words.keys())))}
+            self.lang_lookup = self.model.add_lookup_parameters((len(self.lang2id), options.le))
+        print self.lang2id
 
         self.chars = dict()
         self.evocab = dict()

@@ -204,8 +204,7 @@ if __name__ == '__main__':
                             uas, las = test(tparser, dev_buckets, options.conll_dev, options.output + '/dev.out')
                             print 'dev non-avg test-acc 1', las, uas
 
-                            tparser = mstlstm.MSTParserLSTM(universal_tags, rels, options, dev_words, chars,
-                                                            options.output + '/model')
+                            tparser = mstlstm.MSTParserLSTM(universal_tags, rels, options, dev_words, chars)
                             uas, las = test(tparser, dev_buckets, options.conll_dev, options.output + '/dev.out')
                             print 'dev non-avg test-acc 2', las, uas
                             no_improvement = 0

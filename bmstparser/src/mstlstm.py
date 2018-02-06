@@ -94,6 +94,7 @@ class MSTParserLSTM:
                 self.elookup.init_row(self.evocab[lang][word], external_embedding[lang][word])
 
         self.lang2id = {lang: i for i, lang in enumerate(sorted(list(words.keys())))}
+        print self.lang2id
         if model_path:
             self.lang_lookup = self.model.add_lookup_parameters((len(self.lang2id), options.le), init=dy.NumpyInitializer(lang_lookup_params))
         else:

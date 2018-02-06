@@ -39,8 +39,7 @@ class MSTParserLSTM:
 
         if model_path:
             self.lang2id = lang2id
-            self.lang_lookup = self.model.add_lookup_parameters((len(self.lang2id), options.le),
-                                                                init=dy.NumpyInitializer(lang_lookup_params))
+            self.lang_lookup = self.model.add_lookup_parameters((len(self.lang2id), options.le), init=dy.NumpyInitializer(lang_lookup_params))
         else:
             self.lang2id = {lang: i for i, lang in enumerate(sorted(list(words.keys())))}
             self.lang_lookup = self.model.add_lookup_parameters((len(self.lang2id), options.le))

@@ -8,7 +8,7 @@ import codecs, os, sys, math
 from linalg import *
 
 class MSTParserLSTM:
-    def __init__(self, pos, rels, options, words, chars, model_path=None):
+    def __init__(self, pos, rels, options, train_words, words, chars, model_path=None):
         self.model = dy.Model()
         self.PAD = 1
         self.options = options
@@ -25,11 +25,10 @@ class MSTParserLSTM:
 
         if model_path:
             with open(model_path, 'r') as paramsfp:
-                lang2id, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params, plookup_params,\
-                lang_lookup_params, arc_mlp_head_params, arc_mlp_head_b_params, label_mlp_head_params,\
-                label_mlp_head_b_params, arc_mlp_dep_params, arc_mlp_dep_params, arc_mlp_dep_b_params,\
-                arc_mlp_dep_b_params, label_mlp_dep_params, label_mlp_dep_b_params, w_arc_params,\
-                u_label_params = pickle.load(paramsfp)
+                lang2id, deep_lstm_params, char_lstm_params, wlookup_params, clookup_params, proj_mat_params,\
+                plookup_params, lang_lookup_params, arc_mlp_head_params, arc_mlp_head_b_params, label_mlp_head_params,\
+                label_mlp_head_b_params, arc_mlp_dep_params,arc_mlp_dep_b_params, label_mlp_dep_params,\
+                label_mlp_dep_b_params, w_arc_params, u_label_params = pickle.load(paramsfp)
 
         if model_path:
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe), init=dy.NumpyInitializer(plookup_params))
@@ -47,8 +46,16 @@ class MSTParserLSTM:
 
         self.chars = dict()
         self.evocab = dict()
-        self.clookup = dict()
+        self.vocab = dict()
         self.char_lstm = dict()
+        self.wlookup = dict()
+        for lang in train_words.keys():
+            self.vocab[lang] = {word: ind + 2 for word, ind in enumerate(train_words[lang])}
+            if model_path:
+                self.wlookup[lang] = self.model.add_lookup_parameters((len(self.vocab[lang]) + 2, edim), init=dy.NumpyInitializer(wlookup_params[lang]))
+            else:
+                self.wlookup[lang] = self.model.add_lookup_parameters((len(self.vocab[lang]) + 2, edim))
+        self.clookup = dict()
         self.proj_mat = dict()
         external_embedding = dict()
         word_index = 2
@@ -163,14 +170,16 @@ class MSTParserLSTM:
                 word_mask = np.random.binomial(1, 1. - self.options.dropout, batch_size).astype(np.float32)
                 if self.options.use_pos:
                     tag_mask = np.random.binomial(1, 1. - self.options.dropout, batch_size).astype(np.float32)
-                    scale = 3. / (2. * word_mask + tag_mask + 1e-12)
+                    scale = 3. / (2. * word_mask + tag_mask + 1e-12) if not self.options.use_char else 5. / (
+                    4. * word_mask + tag_mask + 1e-12)
                     word_mask *= scale
                     tag_mask *= scale
                     word_mask = dy.inputTensor(word_mask, batched=True)
                     tag_mask = dy.inputTensor(tag_mask, batched=True)
                     ret.append((word_mask, tag_mask))
                 else:
-                    scale = 2. / (2. * word_mask + 1e-12) if not self.options.use_char else 4. / (4. * word_mask + 1e-12)
+                    scale = 2. / (2. * word_mask + 1e-12) if not self.options.use_char else 4. / (
+                    4. * word_mask + 1e-12)
                     word_mask *= scale
                     word_mask = dy.inputTensor(word_mask, batched=True)
                     ret.append(word_mask)
@@ -224,7 +233,7 @@ class MSTParserLSTM:
         '''
         Here, I assumed all sens have the same length.
         '''
-        words, pos_tags, chars, langs = sens[0], sens[1], sens[4], sens[5]
+        words, pwords, pos_tags, chars, langs = sens[0], sens[1],sens[2], sens[5], sens[6]
         all_inputs = [0] * len(chars.keys())
         for l, lang in enumerate(chars.keys()):
             cembed = [dy.lookup_batch(self.clookup[lang], c) for c in chars[lang]]
@@ -234,7 +243,7 @@ class MSTParserLSTM:
             cnn_reps = [list() for _ in range(len(words[lang]))]
             for i in range(len(words[lang])):
                 cnn_reps[i] = dy.pick_batch(crnns, [i * words[lang].shape[1] + j for j in range(words[lang].shape[1])], 1)
-            wembed = [dy.lookup_batch(self.elookup, words[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
+            wembed = [dy.lookup_batch(self.wlookup[lang], words[lang][i]) +  dy.lookup_batch(self.elookup, pwords[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
             posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in
                         range(len(pos_tags[lang]))] if self.options.use_pos else None
             lang_embeds = [dy.lookup_batch(self.lang_lookup, [self.lang2id[lang]]*len(pos_tags[lang][i])) for i in range(len(pos_tags[lang]))]
@@ -271,7 +280,7 @@ class MSTParserLSTM:
         '''
         Here, I assumed all sens have the same length.
         '''
-        words, pos_tags, chars, langs, signs, positions, batch_num, char_batches, masks = batch
+        words, pwords, pos_tags, chars, langs, signs, positions, batch_num, char_batches, masks = batch
 
         all_inputs = [0] * len(chars.keys())
         for l, lang in enumerate(chars.keys()):
@@ -282,7 +291,7 @@ class MSTParserLSTM:
             cnn_reps = [list() for _ in range(len(words[lang]))]
             for i in range(words[lang].shape[0]):
                 cnn_reps[i] = dy.pick_batch(crnns, char_batches[lang][i], 1)
-            wembed = [dy.lookup_batch(self.elookup, words[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
+            wembed = [dy.lookup_batch(self.wlookup[lang], words[lang][i]) + dy.lookup_batch(self.elookup, pwords[lang][i])  + cnn_reps[i] for i in range(len(words[lang]))]
             posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in
                         range(len(pos_tags[lang]))] if self.options.use_pos else None
             lang_embeds = [dy.lookup_batch(self.lang_lookup, [self.lang2id[lang]] * len(pos_tags[lang][i])) for i in
@@ -358,7 +367,7 @@ class MSTParserLSTM:
             return outputs
 
     def train_shared_rnn(self, mini_batch, train_both=True):
-        pwords, pos_tags, chars, langs, signs, positions, batch_num, char_batches, masks = mini_batch
+        words, pwords, pos_tags, chars, langs, signs, positions, batch_num, char_batches, masks = mini_batch
         # Getting the last hidden layer from BiLSTM.
         H, M, HL, ML = self.shared_rnn_mlp(mini_batch, True)
         dim_0, dim_1, dim_2 = H.dim()[0][1], H.dim()[0][0], H.dim()[1]
@@ -517,6 +526,10 @@ class MSTParserLSTM:
             for lang in self.proj_mat.keys():
                 proj_mat_params[lang] = self.proj_mat[lang].expr().npvalue()
 
+            wlookup_params = dict()
+            for lang in self.wlookup.keys():
+                wlookup_params[lang] = self.wlookup[lang].expr().npvalue()
+
             clookup_params = dict()
             for lang in self.clookup.keys():
                 clookup_params[lang] = self.clookup[lang].expr().npvalue()
@@ -534,10 +547,10 @@ class MSTParserLSTM:
             label_mlp_dep_b_params = self.label_mlp_dep_b.expr().npvalue()
             w_arc_params = self.w_arc.expr().npvalue()
             u_label_params = self.u_label.expr().npvalue()
-            pickle.dump((self.lang2id, deep_lstm_params, char_lstm_params, clookup_params,
+            pickle.dump((self.lang2id, deep_lstm_params, char_lstm_params, wlookup_params, clookup_params,
                          proj_mat_params, plookup_params, lang_lookup_params, arc_mlp_head_params,
                          arc_mlp_head_b_params, label_mlp_head_params, label_mlp_head_b_params, arc_mlp_dep_params,
-                         arc_mlp_dep_params, arc_mlp_dep_b_params, arc_mlp_dep_b_params, label_mlp_dep_params,
+                         arc_mlp_dep_b_params, label_mlp_dep_params,
                          label_mlp_dep_b_params, w_arc_params, u_label_params), paramsfp)
 
     # def load(self, path):

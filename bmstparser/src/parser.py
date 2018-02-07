@@ -80,7 +80,7 @@ if __name__ == '__main__':
     print 'Using external embedding:', options.external_embedding
     if options.predictFlag:
         with open(options.params, 'r') as paramsfp:
-            words, chars, rels, stored_opt = pickle.load(paramsfp)
+            train_words, chars, rels, stored_opt = pickle.load(paramsfp)
         words = defaultdict(set)
         with open(options.conll_test, 'r') as conllFP:
             for sentence in read_conll(conllFP):
@@ -91,7 +91,7 @@ if __name__ == '__main__':
         stored_opt.external_embedding = options.external_embedding
         print stored_opt
         print 'Initializing lstm mstparser:'
-        parser = mstlstm.MSTParserLSTM(universal_tags, rels, stored_opt, words, chars, options.model)
+        parser = mstlstm.MSTParserLSTM(universal_tags, rels, stored_opt, train_words, words, chars, options.model)
         ts = time.time()
         print 'loading buckets'
         test_buckets = [list()]
@@ -104,6 +104,7 @@ if __name__ == '__main__':
         print 'Finished predicting test.', te-ts, 'seconds.'
     else:
         words = defaultdict(set)
+        train_words = defaultdict(set)
         if options.joint:
             print 'reading shared model'
             par_data = Data(options.par, universal_tags)
@@ -111,6 +112,7 @@ if __name__ == '__main__':
                 for lang in par_data.neg_examples.keys():
                     for word in par_data.neg_examples[lang]:
                         words[lang].add(word)
+                        train_words[lang].add(word)
 
         if options.conll_train:
             with open(options.conll_train, 'r') as conllFP:
@@ -118,6 +120,8 @@ if __name__ == '__main__':
                     for node in sentence:
                         if isinstance(node, ConllEntry):
                             words[node.lang_id].add(node.form)
+                            train_words[lang].add(word)
+
         if options.conll_dev:
             with open(options.conll_dev, 'r') as conllFP:
                 for sentence in read_conll(conllFP):
@@ -131,10 +135,13 @@ if __name__ == '__main__':
                         if isinstance(node, ConllEntry):
                             words[node.lang_id].add(node.form)
 
+        for lang in train_words.keys():
+            train_words[lang] = sorted(list(train_words[lang]))
+
         chars = dict()
-        for lang in words.keys():
+        for lang in train_words.keys():
             ch = set()
-            for word in words[lang]:
+            for word in train_words[lang]:
                 for c in word:
                     ch.add(c)
             chars[lang] = sorted(list(ch))
@@ -143,11 +150,11 @@ if __name__ == '__main__':
         rels = utils.vocab(options.conll_train)
         if not os.path.isdir(options.output): os.mkdir(options.output)
         with open(os.path.join(options.output, options.params), 'w') as paramsfp:
-            pickle.dump((words, chars, rels, options), paramsfp)
+            pickle.dump((train_words, chars, rels, options), paramsfp)
         print 'Finished collecting vocab'
 
         print 'Initializing lstm mstparser:'
-        parser = mstlstm.MSTParserLSTM(universal_tags, rels, options, words, chars)
+        parser = mstlstm.MSTParserLSTM(universal_tags, rels, options, train_words, words, chars)
         best_acc = -float('inf')
         t, epoch = 0,1
         train_data = list(utils.read_conll(open(options.conll_train, 'r')))

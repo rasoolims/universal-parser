@@ -28,7 +28,7 @@ class MSTParserLSTM:
                 lang2id, deep_lstm_params, char_lstm_params, wlookup_params, clookup_params, proj_mat_params,\
                 plookup_params, lang_lookup_params, arc_mlp_head_params, arc_mlp_head_b_params, label_mlp_head_params,\
                 label_mlp_head_b_params, arc_mlp_dep_params,arc_mlp_dep_b_params, label_mlp_dep_params,\
-                label_mlp_dep_b_params, w_arc_params, u_label_params = pickle.load(paramsfp)
+                label_mlp_dep_b_params, w_arc_params, u_label_params, external_params = pickle.load(paramsfp)
 
         if model_path:
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe), init=dy.NumpyInitializer(plookup_params))
@@ -102,14 +102,18 @@ class MSTParserLSTM:
                 self.proj_mat[lang] = self.model.add_parameters((edim + options.pe, edim + options.pe))
             if not options.tune_net: self.proj_mat[lang].set_updated(False)
 
-        self.elookup = self.model.add_lookup_parameters((word_index, edim))
         self.num_all_words = word_index
-        self.elookup.set_updated(False)
-        self.elookup.init_row(0, [0] * edim)
-        self.elookup.init_row(1, [0] * edim)
-        for lang in self.evocab.keys():
-            for word in external_embedding[lang].keys():
-                self.elookup.init_row(self.evocab[lang][word], external_embedding[lang][word])
+        if not model_path:
+            self.elookup = self.model.add_lookup_parameters((word_index, edim))
+            #self.elookup.set_updated(False) #todo
+
+            self.elookup.init_row(0, [0] * edim)
+            self.elookup.init_row(1, [0] * edim)
+            for lang in self.evocab.keys():
+                for word in external_embedding[lang].keys():
+                    self.elookup.init_row(self.evocab[lang][word], external_embedding[lang][word])
+        else:
+            self.elookup = self.model.add_lookup_parameters((word_index, edim), init=dy.NumpyInitializer(external_params))
 
         input_dim = edim + options.pe if self.options.use_pos else edim
 
@@ -243,7 +247,8 @@ class MSTParserLSTM:
             cnn_reps = [list() for _ in range(len(words[lang]))]
             for i in range(len(words[lang])):
                 cnn_reps[i] = dy.pick_batch(crnns, [i * words[lang].shape[1] + j for j in range(words[lang].shape[1])], 1)
-            wembed = [dy.lookup_batch(self.wlookup[lang], words[lang][i]) + dy.lookup_batch(self.elookup, pwords[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
+            #wembed = [dy.lookup_batch(self.wlookup[lang], words[lang][i]) + dy.lookup_batch(self.elookup, pwords[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
+            wembed = [dy.lookup_batch(self.elookup, pwords[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
             posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in range(len(pos_tags[lang]))] if self.options.use_pos else None
             lang_embeds = [dy.lookup_batch(self.lang_lookup, [self.lang2id[lang]]*len(pos_tags[lang][i])) for i in range(len(pos_tags[lang]))]
 
@@ -289,7 +294,8 @@ class MSTParserLSTM:
             cnn_reps = [list() for _ in range(len(words[lang]))]
             for i in range(words[lang].shape[0]):
                 cnn_reps[i] = dy.pick_batch(crnns, char_batches[lang][i], 1)
-            wembed = [dy.lookup_batch(self.wlookup[lang], words[lang][i]) + dy.lookup_batch(self.elookup, pwords[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
+           # wembed = [dy.lookup_batch(self.wlookup[lang], words[lang][i]) + dy.lookup_batch(self.elookup, pwords[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
+            wembed = [dy.lookup_batch(self.elookup, pwords[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
             posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in
                         range(len(pos_tags[lang]))] if self.options.use_pos else None
             lang_embeds = [dy.lookup_batch(self.lang_lookup, [self.lang2id[lang]] * len(pos_tags[lang][i])) for i in
@@ -524,6 +530,7 @@ class MSTParserLSTM:
             for lang in self.proj_mat.keys():
                 proj_mat_params[lang] = self.proj_mat[lang].expr().npvalue()
 
+            external_params = self.elookup.npvalue()
             wlookup_params = dict()
             for lang in self.wlookup.keys():
                 wlookup_params[lang] = self.wlookup[lang].expr().npvalue()
@@ -549,7 +556,7 @@ class MSTParserLSTM:
                          proj_mat_params, plookup_params, lang_lookup_params, arc_mlp_head_params,
                          arc_mlp_head_b_params, label_mlp_head_params, label_mlp_head_b_params, arc_mlp_dep_params,
                          arc_mlp_dep_b_params, label_mlp_dep_params,
-                         label_mlp_dep_b_params, w_arc_params, u_label_params), paramsfp)
+                         label_mlp_dep_b_params, w_arc_params, u_label_params, external_params), paramsfp)
 
     # def load(self, path):
     #     with open(path, 'r') as paramsfp:

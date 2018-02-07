@@ -246,6 +246,10 @@ class MSTParserLSTM:
             print lang, len(self.vocab[lang]), self.num_all_words
             print words[lang][i]
             print pwords[lang][i]
+            for w in words[lang][i]:
+                assert w < len(self.vocab[lang])
+            for w in pwords[lang][i]:
+                assert w < self.num_all_words
             wembed = [dy.lookup_batch(self.wlookup[lang], words[lang][i]) + dy.lookup_batch(self.elookup, pwords[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
             posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in
                         range(len(pos_tags[lang]))] if self.options.use_pos else None

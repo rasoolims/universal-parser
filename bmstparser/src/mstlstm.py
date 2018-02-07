@@ -55,6 +55,7 @@ class MSTParserLSTM:
                 self.wlookup[lang] = self.model.add_lookup_parameters((len(self.vocab[lang]) + 2, edim), init=dy.NumpyInitializer(wlookup_params[lang]))
             else:
                 self.wlookup[lang] = self.model.add_lookup_parameters((len(self.vocab[lang]) + 2, edim))
+            print 'wlookup', lang, len(self.vocab[lang]) + 2
         self.clookup = dict()
         self.proj_mat = dict()
         external_embedding = dict()
@@ -233,7 +234,7 @@ class MSTParserLSTM:
         '''
         Here, I assumed all sens have the same length.
         '''
-        words, pwords, pos_tags, chars, langs = sens[0], sens[1],sens[2], sens[5], sens[6]
+        words, pwords, pos_tags, chars, langs = sens[0], sens[1], sens[2], sens[5], sens[6]
         all_inputs = [0] * len(chars.keys())
         for l, lang in enumerate(chars.keys()):
             cembed = [dy.lookup_batch(self.clookup[lang], c) for c in chars[lang]]
@@ -243,14 +244,13 @@ class MSTParserLSTM:
             cnn_reps = [list() for _ in range(len(words[lang]))]
             for i in range(len(words[lang])):
                 cnn_reps[i] = dy.pick_batch(crnns, [i * words[lang].shape[1] + j for j in range(words[lang].shape[1])], 1)
-            wembed = [dy.lookup_batch(self.wlookup[lang], words[lang][i]) +  dy.lookup_batch(self.elookup, pwords[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
+            wembed = [dy.lookup_batch(self.wlookup[lang], words[lang][i]) + dy.lookup_batch(self.elookup, pwords[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
             posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in
                         range(len(pos_tags[lang]))] if self.options.use_pos else None
             lang_embeds = [dy.lookup_batch(self.lang_lookup, [self.lang2id[lang]]*len(pos_tags[lang][i])) for i in range(len(pos_tags[lang]))]
 
             if not train:
-                inputs = [dy.concatenate([w, pos]) for w, pos in
-                          zip(wembed, posembed)] if self.options.use_pos else wembed
+                inputs = [dy.concatenate([w, pos]) for w, pos in zip(wembed, posembed)] if self.options.use_pos else wembed
                 inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in inputs]
             else:
                 emb_masks = self.generate_emb_mask(words[lang].shape[0], words[lang].shape[1])
@@ -291,7 +291,7 @@ class MSTParserLSTM:
             cnn_reps = [list() for _ in range(len(words[lang]))]
             for i in range(words[lang].shape[0]):
                 cnn_reps[i] = dy.pick_batch(crnns, char_batches[lang][i], 1)
-            wembed = [dy.lookup_batch(self.wlookup[lang], words[lang][i]) + dy.lookup_batch(self.elookup, pwords[lang][i])  + cnn_reps[i] for i in range(len(words[lang]))]
+            wembed = [dy.lookup_batch(self.wlookup[lang], words[lang][i]) + dy.lookup_batch(self.elookup, pwords[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
             posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in
                         range(len(pos_tags[lang]))] if self.options.use_pos else None
             lang_embeds = [dy.lookup_batch(self.lang_lookup, [self.lang2id[lang]] * len(pos_tags[lang][i])) for i in
@@ -329,18 +329,18 @@ class MSTParserLSTM:
         shape_0, shape_1 = mini_batch[-3], mini_batch[-2]
         arc_scores = self.bilinear(M, self.w_arc.expr(), H, self.options.arc_mlp, shape_0, shape_1,1, True, False)
         rel_scores = self.bilinear(ML, self.u_label.expr(), HL, self.options.label_mlp, shape_0, shape_1, len(self.irels), True, True)
-        flat_scores = dy.reshape(arc_scores, (shape_0,), shape_0* shape_1)
-        flat_rel_scores = dy.reshape(rel_scores, (shape_0, len(self.irels)), shape_0* shape_1)
+        flat_scores = dy.reshape(arc_scores, (shape_0,), shape_0 * shape_1)
+        flat_rel_scores = dy.reshape(rel_scores, (shape_0, len(self.irels)), shape_0 * shape_1)
         masks = np.reshape(mini_batch[-1], (-1,), 'F')
         mask_1D_tensor = dy.inputTensor(masks, batched=True)
         n_tokens = np.sum(masks)
         if train:
             heads = np.reshape(mini_batch[3], (-1,), 'F')
-            partial_rel_scores =  dy.pick_batch(flat_rel_scores, heads)
+            partial_rel_scores = dy.pick_batch(flat_rel_scores, heads)
             gold_relations = np.reshape(mini_batch[4], (-1,), 'F')
-            arc_losses =  dy.pickneglogsoftmax_batch(flat_scores, heads)
+            arc_losses = dy.pickneglogsoftmax_batch(flat_scores, heads)
             arc_loss = dy.sum_batches(arc_losses*mask_1D_tensor)/n_tokens
-            rel_losses =  dy.pickneglogsoftmax_batch(partial_rel_scores, gold_relations)
+            rel_losses = dy.pickneglogsoftmax_batch(partial_rel_scores, gold_relations)
             rel_loss = dy.sum_batches(rel_losses*mask_1D_tensor)/n_tokens
             err = 0.5 * (arc_loss + rel_loss)
             err.scalar_value()

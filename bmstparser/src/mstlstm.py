@@ -254,13 +254,13 @@ class MSTParserLSTM:
 
             if not train:
                 inputs = [dy.concatenate([w, pos]) for w, pos in zip(wembed, posembed)] if self.options.use_pos else wembed
-                inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in inputs]
+                inputs = [self.activation(self.proj_mat[lang].expr() * inp) for inp in inputs]
             else:
                 emb_masks = self.generate_emb_mask(words[lang].shape[0], words[lang].shape[1])
                 inputs = [dy.concatenate([dy.cmult(w, wm), dy.cmult(pos, posm)]) for w, pos, (wm, posm) in
                           zip(wembed, posembed, emb_masks)] if self.options.use_pos \
                     else [dy.cmult(w, wm) for w, wm in zip(wembed, emb_masks)]
-                inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in inputs]
+                inputs = [self.activation(self.proj_mat[lang].expr() * inp) for inp in inputs]
             inputs = [dy.concatenate([inp, lembed]) for inp, lembed in zip(inputs, lang_embeds)]
             all_inputs[l] = inputs
 
@@ -269,7 +269,7 @@ class MSTParserLSTM:
         d = self.options.dropout
         h_out = self.bi_rnn(lstm_input, lstm_input[0].dim()[1], d if train else 0, d if train else 0)
 
-        h =  dy.dropout_dim(dy.concatenate_cols(h_out), 1, d) if train else dy.concatenate_cols(h_out)
+        h = dy.dropout_dim(dy.concatenate_cols(h_out), 1, d) if train else dy.concatenate_cols(h_out)
         H = self.activation(dy.affine_transform([self.arc_mlp_head_b.expr(), self.arc_mlp_head.expr(), h]))
         M = self.activation(dy.affine_transform([self.arc_mlp_dep_b.expr(), self.arc_mlp_dep.expr(), h]))
         HL = self.activation(dy.affine_transform([self.label_mlp_head_b.expr(), self.label_mlp_head.expr(), h]))
@@ -304,13 +304,13 @@ class MSTParserLSTM:
             if not train:
                 inputs = [dy.concatenate([w, pos]) for w, pos in
                           zip(wembed, posembed)] if self.options.use_pos else wembed
-                inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in inputs]
+                inputs = [self.activation(self.proj_mat[lang].expr() * inp) for inp in inputs]
             else:
                 emb_masks = self.generate_emb_mask(words[lang].shape[0], words[lang].shape[1])
                 inputs = [dy.concatenate([dy.cmult(w, wm), dy.cmult(pos, posm)]) for w, pos, (wm, posm) in
                           zip(wembed, posembed, emb_masks)] if self.options.use_pos \
                     else [dy.cmult(w, wm) for w, wm in zip(wembed, emb_masks)]
-                inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in inputs]
+                inputs = [self.activation(self.proj_mat[lang].expr() * inp) for inp in inputs]
             inputs = [dy.concatenate([inp, lembed]) for inp, lembed in zip(inputs, lang_embeds)]
             all_inputs[l] = inputs
 

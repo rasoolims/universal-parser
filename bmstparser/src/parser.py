@@ -120,7 +120,7 @@ if __name__ == '__main__':
                     for node in sentence:
                         if isinstance(node, ConllEntry):
                             words[node.lang_id].add(node.form)
-                            train_words[node.lang_id].add(node.form)
+                            train_words[node.lang_id].add(node.norm)
 
         if options.conll_dev:
             with open(options.conll_dev, 'r') as conllFP:

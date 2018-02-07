@@ -133,7 +133,7 @@ def get_minibatch(batch, max_c_len, cur_len, model):
     for lang_id in batch.keys():
         all_batches += batch[lang_id]
         langs += [lang_id] * len(batch[lang_id])
-    chars, words, pwords, pos =dict(), dict(), dict(), dict()
+    chars, words, pwords, pos = dict(), dict(), dict(), dict()
     for lang_id in batch.keys():
         chars_ = [list() for _ in range(max_c_len)]
         for c_pos in range(max_c_len):
@@ -147,7 +147,7 @@ def get_minibatch(batch, max_c_len, cur_len, model):
             chars_[c_pos] = np.array(ch)
         chars[lang_id] = np.array(chars_)
         words[lang_id] = np.array([np.array(
-            [model.vocab[langs[i]].get(batch[lang_id][i][j].norm, 0) if j < len(batch[lang_id][i]) else model.PAD
+            [model.vocab[lang_id].get(batch[lang_id][i][j].norm, 0) if j < len(batch[lang_id][i]) else model.PAD
              for i in range(len(batch[lang_id]))]) for j in range(cur_len)])
         pwords[lang_id] = np.array([np.array(
             [model.evocab[langs[i]].get(batch[lang_id][i][j].form, 0) if j < len(batch[lang_id][i]) else model.PAD

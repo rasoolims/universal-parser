@@ -136,7 +136,8 @@ if __name__ == '__main__':
                             words[node.lang_id].add(node.form)
 
         for lang in train_words.keys():
-            train_words[lang] = sorted(list(train_words[lang]))
+            sorted_ = sorted(list(train_words[lang]))
+            train_words[lang] = sorted_
 
         chars = dict()
         for lang in train_words.keys():

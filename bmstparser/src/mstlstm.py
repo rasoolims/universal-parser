@@ -55,7 +55,6 @@ class MSTParserLSTM:
                 self.wlookup[lang] = self.model.add_lookup_parameters((len(self.vocab[lang]) + 2, edim), init=dy.NumpyInitializer(wlookup_params[lang]))
             else:
                 self.wlookup[lang] = self.model.add_lookup_parameters((len(self.vocab[lang]) + 2, edim))
-            print 'wlookup', lang, len(self.vocab[lang]) + 2
         self.clookup = dict()
         self.proj_mat = dict()
         external_embedding = dict()
@@ -363,7 +362,7 @@ class MSTParserLSTM:
                 rel_prob = rel_prob[np.arange(len(arc_pred)), arc_pred]
                 rel_pred = decoder.rel_argmax(rel_prob, sent_len, self.PAD_REL, self.root_id)
                 outputs.append((arc_pred[1:sent_len], rel_pred[1:sent_len]))
-            dy.renew_cg()
+            dy.renew_cg(immediate_compute=True, check_validity=True)
             return outputs
 
     def train_shared_rnn(self, mini_batch, train_both=True):

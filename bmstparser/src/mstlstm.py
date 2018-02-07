@@ -530,7 +530,7 @@ class MSTParserLSTM:
             for lang in self.proj_mat.keys():
                 proj_mat_params[lang] = self.proj_mat[lang].expr().npvalue()
 
-            external_params = self.elookup.npvalue()
+            external_params = self.elookup.expr().npvalue()
             wlookup_params = dict()
             for lang in self.wlookup.keys():
                 wlookup_params[lang] = self.wlookup[lang].expr().npvalue()

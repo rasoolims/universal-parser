@@ -335,9 +335,9 @@ class MSTParserLSTM:
         mask_1D_tensor = dy.inputTensor(masks, batched=True)
         n_tokens = np.sum(masks)
         if train:
-            heads = np.reshape(mini_batch[2], (-1,), 'F')
+            heads = np.reshape(mini_batch[3], (-1,), 'F')
             partial_rel_scores =  dy.pick_batch(flat_rel_scores, heads)
-            gold_relations = np.reshape(mini_batch[3], (-1,), 'F')
+            gold_relations = np.reshape(mini_batch[4], (-1,), 'F')
             arc_losses =  dy.pickneglogsoftmax_batch(flat_scores, heads)
             arc_loss = dy.sum_batches(arc_losses*mask_1D_tensor)/n_tokens
             rel_losses =  dy.pickneglogsoftmax_batch(partial_rel_scores, gold_relations)

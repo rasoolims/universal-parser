@@ -120,7 +120,7 @@ if __name__ == '__main__':
                     for node in sentence:
                         if isinstance(node, ConllEntry):
                             words[node.lang_id].add(node.form)
-                            train_words[lang].add(word)
+                            train_words[node.lang_id].add(word)
 
         if options.conll_dev:
             with open(options.conll_dev, 'r') as conllFP:
@@ -136,8 +136,7 @@ if __name__ == '__main__':
                             words[node.lang_id].add(node.form)
 
         for lang in train_words.keys():
-            sorted_ = sorted(list(train_words[lang]))
-            train_words[lang] = sorted_
+            train_words[lang] = sorted(list(train_words[lang]))
 
         chars = dict()
         for lang in train_words.keys():

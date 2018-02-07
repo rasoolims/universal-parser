@@ -243,7 +243,8 @@ class MSTParserLSTM:
             cnn_reps = [list() for _ in range(len(words[lang]))]
             for i in range(len(words[lang])):
                 cnn_reps[i] = dy.pick_batch(crnns, [i * words[lang].shape[1] + j for j in range(words[lang].shape[1])], 1)
-            print lang, len(self.num_all_words)
+            print lang, len(self.vocab[lang]), self.num_all_words
+            print words[lang][i]
             print pwords[lang][i]
             wembed = [dy.lookup_batch(self.wlookup[lang], words[lang][i]) + dy.lookup_batch(self.elookup, pwords[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
             posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in

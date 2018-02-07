@@ -244,15 +244,17 @@ class MSTParserLSTM:
             for i in range(len(words[lang])):
                 cnn_reps[i] = dy.pick_batch(crnns, [i * words[lang].shape[1] + j for j in range(words[lang].shape[1])], 1)
             print lang, len(self.vocab[lang]), self.num_all_words
-            print words[lang][i]
-            print pwords[lang][i]
-            for w in words[lang][i]:
-                assert w < len(self.vocab[lang])
-            for w in pwords[lang][i]:
-                assert w < self.num_all_words
+
+            for i in range(len(words[lang])):
+                print i
+                print words[lang][i]
+                print pwords[lang][i]
+                for w in words[lang][i]:
+                    assert w < len(self.vocab[lang])
+                for w in pwords[lang][i]:
+                    assert w < self.num_all_words
             wembed = [dy.lookup_batch(self.wlookup[lang], words[lang][i]) + dy.lookup_batch(self.elookup, pwords[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
-            posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in
-                        range(len(pos_tags[lang]))] if self.options.use_pos else None
+            posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in range(len(pos_tags[lang]))] if self.options.use_pos else None
             lang_embeds = [dy.lookup_batch(self.lang_lookup, [self.lang2id[lang]]*len(pos_tags[lang][i])) for i in range(len(pos_tags[lang]))]
 
             if not train:

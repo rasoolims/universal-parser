@@ -50,7 +50,7 @@ class MSTParserLSTM:
         self.char_lstm = dict()
         self.wlookup = dict()
         for lang in train_words.keys():
-            self.vocab[lang] = {word: ind + 2 for word, ind in enumerate(train_words[lang])}
+            self.vocab[lang] = {word: ind + 2 for ind, word in enumerate(train_words[lang])}
             if model_path:
                 self.wlookup[lang] = self.model.add_lookup_parameters((len(self.vocab[lang]) + 2, edim), init=dy.NumpyInitializer(wlookup_params[lang]))
             else:

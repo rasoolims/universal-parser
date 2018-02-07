@@ -243,11 +243,6 @@ class MSTParserLSTM:
             cnn_reps = [list() for _ in range(len(words[lang]))]
             for i in range(len(words[lang])):
                 cnn_reps[i] = dy.pick_batch(crnns, [i * words[lang].shape[1] + j for j in range(words[lang].shape[1])], 1)
-            print lang, len(self.vocab[lang]), self.num_all_words
-
-            for i in range(len(words[lang])):
-                for w in words[lang][i]:
-                    assert w < len(self.vocab[lang])
             wembed = [dy.lookup_batch(self.wlookup[lang], words[lang][i]) + dy.lookup_batch(self.elookup, pwords[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
             posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in range(len(pos_tags[lang]))] if self.options.use_pos else None
             lang_embeds = [dy.lookup_batch(self.lang_lookup, [self.lang2id[lang]]*len(pos_tags[lang][i])) for i in range(len(pos_tags[lang]))]
@@ -350,7 +345,7 @@ class MSTParserLSTM:
             loss = err.value()
             err.backward()
             self.trainer.update()
-            dy.renew_cg(immediate_compute=True, check_validity=True)
+            dy.renew_cg()
             return t + 1, loss
         else:
             arc_probs = np.transpose(np.reshape(dy.softmax(flat_scores).npvalue(), (shape_0,  shape_0,  shape_1), 'F'))

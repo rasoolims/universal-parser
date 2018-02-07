@@ -346,7 +346,7 @@ class MSTParserLSTM:
             loss = err.value()
             err.backward()
             self.trainer.update()
-            dy.renew_cg()
+            dy.renew_cg(immediate_compute=True, check_validity=True)
             return t + 1, loss
         else:
             arc_probs = np.transpose(np.reshape(dy.softmax(flat_scores).npvalue(), (shape_0,  shape_0,  shape_1), 'F'))
@@ -362,7 +362,7 @@ class MSTParserLSTM:
                 rel_prob = rel_prob[np.arange(len(arc_pred)), arc_pred]
                 rel_pred = decoder.rel_argmax(rel_prob, sent_len, self.PAD_REL, self.root_id)
                 outputs.append((arc_pred[1:sent_len], rel_pred[1:sent_len]))
-            dy.renew_cg(immediate_compute=True, check_validity=True)
+            dy.renew_cg()
             return outputs
 
     def train_shared_rnn(self, mini_batch, train_both=True):

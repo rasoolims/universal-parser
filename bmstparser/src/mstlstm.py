@@ -25,7 +25,7 @@ class MSTParserLSTM:
 
         if model_path:
             with open(model_path, 'r') as paramsfp:
-                lang2id, deep_lstm_params, char_lstm_params, wlookup_params, clookup_params, proj_mat_params,\
+                lang2id, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params,\
                 plookup_params, lang_lookup_params, arc_mlp_head_params, arc_mlp_head_b_params, label_mlp_head_params,\
                 label_mlp_head_b_params, arc_mlp_dep_params,arc_mlp_dep_b_params, label_mlp_dep_params,\
                 label_mlp_dep_b_params, w_arc_params, u_label_params, external_params = pickle.load(paramsfp)
@@ -48,13 +48,6 @@ class MSTParserLSTM:
         self.evocab = dict()
         self.vocab = dict()
         self.char_lstm = dict()
-        self.wlookup = dict()
-        for lang in train_words.keys():
-            self.vocab[lang] = {word: ind + 2 for ind, word in enumerate(train_words[lang])}
-            if model_path:
-                self.wlookup[lang] = self.model.add_lookup_parameters((len(self.vocab[lang]) + 2, edim), init=dy.NumpyInitializer(wlookup_params[lang]))
-            else:
-                self.wlookup[lang] = self.model.add_lookup_parameters((len(self.vocab[lang]) + 2, edim))
         self.clookup = dict()
         self.proj_mat = dict()
         external_embedding = dict()
@@ -531,9 +524,9 @@ class MSTParserLSTM:
                 proj_mat_params[lang] = self.proj_mat[lang].expr().npvalue()
 
             external_params = self.elookup.expr().npvalue()
-            wlookup_params = dict()
-            for lang in self.wlookup.keys():
-                wlookup_params[lang] = self.wlookup[lang].expr().npvalue()
+            # wlookup_params = dict()
+            # for lang in self.wlookup.keys():
+            #     wlookup_params[lang] = self.wlookup[lang].expr().npvalue()
 
             clookup_params = dict()
             for lang in self.clookup.keys():
@@ -552,7 +545,7 @@ class MSTParserLSTM:
             label_mlp_dep_b_params = self.label_mlp_dep_b.expr().npvalue()
             w_arc_params = self.w_arc.expr().npvalue()
             u_label_params = self.u_label.expr().npvalue()
-            pickle.dump((self.lang2id, deep_lstm_params, char_lstm_params, wlookup_params, clookup_params,
+            pickle.dump((self.lang2id, deep_lstm_params, char_lstm_params, clookup_params,
                          proj_mat_params, plookup_params, lang_lookup_params, arc_mlp_head_params,
                          arc_mlp_head_b_params, label_mlp_head_params, label_mlp_head_b_params, arc_mlp_dep_params,
                          arc_mlp_dep_b_params, label_mlp_dep_params,

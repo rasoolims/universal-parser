@@ -225,7 +225,7 @@ class MSTParserLSTM:
             if not train:
                 inputs = [dy.concatenate([w, pos, lembed]) for w, pos, lembed in zip(wembed, posembed, lang_embeds)]
             else:
-                emb_masks = self.generate_emb_mask(words.shape[0], words.shape[1])
+                emb_masks = self.generate_emb_mask(words[lang].shape[0], words[lang].shape[1])
                 inputs = [dy.concatenate([dy.cmult(w, wm), dy.cmult(pos, posm), dy.cmult(lembed, langm)])
                           for w, pos, lembed, (wm, posm, langm) in zip(wembed, posembed, lang_embeds, emb_masks)]
 

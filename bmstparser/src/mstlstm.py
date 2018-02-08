@@ -209,16 +209,17 @@ class MSTParserLSTM:
         words, pwords, pos_tags, chars, langs = sens[0], sens[1], sens[2], sens[5], sens[6]
         all_inputs = [0] * len(chars.keys())
         for l, lang in enumerate(chars.keys()):
-            cembed = [dy.lookup_batch(self.clookup[lang], c) for c in chars[lang]]
-            char_fwd = self.char_lstm[lang].builder_layers[0][0].initial_state().transduce(cembed)[-1]
-            char_bckd = self.char_lstm[lang].builder_layers[0][1].initial_state().transduce(reversed(cembed))[-1]
-            crnns = dy.reshape(dy.concatenate_cols([char_fwd, char_bckd]), (self.options.we, chars[lang].shape[1]))
-            cnn_reps = [list() for _ in range(len(words[lang]))]
-            for i in range(len(words[lang])):
-                cnn_reps[i] = dy.pick_batch(crnns, [i * words[lang].shape[1] + j for j in range(words[lang].shape[1])], 1)
-            char_inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in cnn_reps]
-            wembed = [dy.lookup_batch(self.wlookup, pwords[lang][i]) + dy.lookup_batch(self.xlookup, words[lang][i]) + char_inputs[i] for
-                      i in range(len(words[lang]))]
+            # cembed = [dy.lookup_batch(self.clookup[lang], c) for c in chars[lang]]
+            # char_fwd = self.char_lstm[lang].builder_layers[0][0].initial_state().transduce(cembed)[-1]
+            # char_bckd = self.char_lstm[lang].builder_layers[0][1].initial_state().transduce(reversed(cembed))[-1]
+            # crnns = dy.reshape(dy.concatenate_cols([char_fwd, char_bckd]), (self.options.we, chars[lang].shape[1]))
+            # cnn_reps = [list() for _ in range(len(words[lang]))]
+            # for i in range(len(words[lang])):
+            #     cnn_reps[i] = dy.pick_batch(crnns, [i * words[lang].shape[1] + j for j in range(words[lang].shape[1])], 1)
+            # char_inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in cnn_reps]
+            # wembed = [dy.lookup_batch(self.wlookup, pwords[lang][i]) + dy.lookup_batch(self.xlookup, words[lang][i]) + char_inputs[i] for
+            #           i in range(len(words[lang]))]
+            wembed = [dy.lookup_batch(self.wlookup, pwords[lang][i]) + dy.lookup_batch(self.xlookup, words[lang][i])  for i in range(len(words[lang]))]
             posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in range(len(pos_tags[lang]))]
             lang_embeds = [dy.lookup_batch(self.lang_lookup, [self.lang2id[lang]] * len(pos_tags[lang][i])) for i in
                            range(len(pos_tags[lang]))]

@@ -62,7 +62,6 @@ if __name__ == '__main__':
     parser.add_option("--no_char", action="store_false", dest="use_char", default=True)
     parser.add_option("--no_pos", action="store_false", dest="use_pos", default=True)
     parser.add_option("--stop", type="int", dest="stop", default=50)
-    parser.add_option("--tune_net", action="store_true", dest="tune_net", default=False)
     parser.add_option("--no_init", action="store_true", dest="no_init", default=False)
     parser.add_option("--dynet-mem", type="int", dest="mem", default=0)
     parser.add_option("--dynet-autobatch", type="int", dest="dynet-autobatch", default=0)
@@ -81,19 +80,14 @@ if __name__ == '__main__':
     print 'Using external embedding:', options.external_embedding
     if options.predictFlag:
         with open(options.params, 'r') as paramsfp:
-            train_words, chars, rels, stored_opt = pickle.load(paramsfp)
-        words = defaultdict(set)
-        with open(options.conll_test, 'r') as conllFP:
-            for sentence in read_conll(conllFP):
-                for node in sentence:
-                    if isinstance(node, ConllEntry):
-                        words[node.lang_id].add(node.form)
+            words, chars, rels, stored_opt = pickle.load(paramsfp)
+
 
         stored_opt.external_embedding = options.external_embedding
         print stored_opt
         print 'Initializing lstm mstparser:'
         #parser = mstlstm.MSTParserLSTM(universal_tags, rels, stored_opt, train_words, words, chars, options.model)
-        parser = mstlstm.MSTParserLSTM(universal_tags, rels, stored_opt, train_words, train_words, chars, options.model)
+        parser = mstlstm.MSTParserLSTM(universal_tags, rels, stored_opt, words, chars, options.model)
         ts = time.time()
         print 'loading buckets'
         test_buckets = [list()]
@@ -105,7 +99,7 @@ if __name__ == '__main__':
         te = time.time()
         print 'Finished predicting test.', te-ts, 'seconds.'
     else:
-        words = defaultdict(set)
+        words = set()
         train_words = defaultdict(set)
         if options.joint:
             print 'reading shared model'
@@ -113,7 +107,7 @@ if __name__ == '__main__':
             if par_data:
                 for lang in par_data.neg_examples.keys():
                     for word in par_data.neg_examples[lang]:
-                        words[lang].add(word)
+                        words.add(word)
                         train_words[lang].add(word)
 
         if options.conll_train:
@@ -121,22 +115,9 @@ if __name__ == '__main__':
                 for sentence in read_conll(conllFP):
                     for node in sentence:
                         if isinstance(node, ConllEntry):
-                            words[node.lang_id].add(node.form)
+                            words.add(node.form)
                             train_words[node.lang_id].add(node.norm)
-
-        if options.conll_dev:
-            with open(options.conll_dev, 'r') as conllFP:
-                for sentence in read_conll(conllFP):
-                    for node in sentence:
-                        if isinstance(node, ConllEntry):
-                            words[node.lang_id].add(node.form)
-        if options.conll_test:
-            with open(options.conll_test, 'r') as conllFP:
-                for sentence in read_conll(conllFP):
-                    for node in sentence:
-                        if isinstance(node, ConllEntry):
-                            words[node.lang_id].add(node.form)
-
+        words = sorted(list(words))
         for lang in train_words.keys():
             train_words[lang] = sorted(list(train_words[lang]))
 
@@ -156,7 +137,7 @@ if __name__ == '__main__':
         print 'Finished collecting vocab'
 
         print 'Initializing lstm mstparser:'
-        parser = mstlstm.MSTParserLSTM(universal_tags, rels, options, train_words, words, chars)
+        parser = mstlstm.MSTParserLSTM(universal_tags, rels, options, words, chars)
         best_acc = -float('inf')
         t, epoch = 0,1
         train_data = list(utils.read_conll(open(options.conll_train, 'r')))

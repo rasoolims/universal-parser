@@ -8,7 +8,7 @@ import codecs, os, sys, math
 from linalg import *
 
 class MSTParserLSTM:
-    def __init__(self, pos, rels, options, train_words, words, chars, model_path=None):
+    def __init__(self, pos, rels, options, words, chars, model_path=None):
         self.model = dy.Model()
         self.PAD = 1
         self.options = options
@@ -28,29 +28,30 @@ class MSTParserLSTM:
                 lang2id, deep_lstm_params, char_lstm_params, clookup_params, proj_mat_params,\
                 plookup_params, lang_lookup_params, arc_mlp_head_params, arc_mlp_head_b_params, label_mlp_head_params,\
                 label_mlp_head_b_params, arc_mlp_dep_params,arc_mlp_dep_b_params, label_mlp_dep_params,\
-                label_mlp_dep_b_params, w_arc_params, u_label_params, external_params = pickle.load(paramsfp)
+                label_mlp_dep_b_params, w_arc_params, u_label_params, wlookup_params = pickle.load(paramsfp)
+
+        self.vocab = {word: ind + 2 for ind, word in enumerate(words)}
 
         if model_path:
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe), init=dy.NumpyInitializer(plookup_params))
+            self.wlookup = self.model.add_lookup_parameters((len(words) + 2, edim), init=dy.NumpyInitializer(wlookup_params))
         else:
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe))
+            self.wlookup = self.model.add_lookup_parameters((len(words) + 2, edim))
 
 
         if model_path:
             self.lang2id = lang2id
             self.lang_lookup = self.model.add_lookup_parameters((len(self.lang2id), options.le), init=dy.NumpyInitializer(lang_lookup_params))
         else:
-            self.lang2id = {lang: i for i, lang in enumerate(sorted(list(words.keys())))}
+            self.lang2id = {lang: i for i, lang in enumerate(sorted(list(chars.keys())))}
             self.lang_lookup = self.model.add_lookup_parameters((len(self.lang2id), options.le))
         print self.lang2id
 
         self.chars = dict()
-        self.evocab = dict()
         self.char_lstm = dict()
         self.clookup = dict()
         self.proj_mat = dict()
-        external_embedding = dict()
-        word_index = 2
 
         exfp = gzip.open(options.xe, 'r')
         xemb = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in exfp if len(line.split(' ')) > 2}
@@ -67,27 +68,8 @@ class MSTParserLSTM:
                 self.xlookup.init_row(0, xemb[word])
         print 'Initialized with pre-trained code-switched embedding. Vector dimensions', xdim, 'and', len(xemb)
 
-        for f in os.listdir(options.external_embedding):
-            lang = f[:-3]
-            external_embedding[lang] = dict()
-            if lang in words:
-                efp = gzip.open(options.external_embedding + '/' + f, 'r')
-                for line in efp:
-                    spl = line.strip().split(' ')
-                    if len(spl) > 2:
-                        w = spl[0]
-                        if w in words[lang]:
-                            external_embedding[lang][w] = [float(f) for f in spl[1:]]
-                efp.close()
-
-            self.evocab[lang] = {word: i + word_index for i, word in enumerate(external_embedding[lang])}
-            word_index += len(self.evocab[lang])
-
-            if len(external_embedding[lang]) > 0:
-                edim = len(external_embedding[lang].values()[0])
+        for lang in chars.keys():
             self.chars[lang] = {c: i + 2 for i, c in enumerate(chars[lang])}
-
-            print 'Loaded vector', edim, 'and', len(external_embedding[lang]), 'for', lang
             if model_path:
                 self.clookup[lang] = self.model.add_lookup_parameters((len(chars[lang]) + 2, options.ce), init=dy.NumpyInitializer(clookup_params[lang]))
             else:
@@ -105,25 +87,11 @@ class MSTParserLSTM:
                         if not options.tune_net: params[j].set_updated(False)
 
             if model_path:
-                self.proj_mat[lang] = self.model.add_parameters((edim + options.pe, edim + options.pe), init=dy.NumpyInitializer(proj_mat_params[lang]))
+                self.proj_mat[lang] = self.model.add_parameters((edim, edim), init=dy.NumpyInitializer(proj_mat_params[lang]))
             else:
-                self.proj_mat[lang] = self.model.add_parameters((edim + options.pe, edim + options.pe))
-            if not options.tune_net: self.proj_mat[lang].set_updated(False)
+                self.proj_mat[lang] = self.model.add_parameters((edim, edim))
 
-        self.num_all_words = word_index
-        if not model_path:
-            self.elookup = self.model.add_lookup_parameters((word_index, edim))
-            #self.elookup.set_updated(False) #todo
-
-            self.elookup.init_row(0, [0] * edim)
-            self.elookup.init_row(1, [0] * edim)
-            for lang in self.evocab.keys():
-                for word in external_embedding[lang].keys():
-                    self.elookup.init_row(self.evocab[lang][word], external_embedding[lang][word])
-        else:
-            self.elookup = self.model.add_lookup_parameters((word_index, edim), init=dy.NumpyInitializer(external_params))
-
-        input_dim = edim + options.pe if self.options.use_pos else edim
+        input_dim = edim + options.pe
 
         self.deep_lstms = dy.BiRNNBuilder(options.layer, input_dim + options.le + xdim, options.rnn * 2, self.model, dy.VanillaLSTMBuilder)
         if not model_path:
@@ -180,21 +148,17 @@ class MSTParserLSTM:
             ret = []
             for _ in xrange(seq_len):
                 word_mask = np.random.binomial(1, 1. - self.options.dropout, batch_size).astype(np.float32)
-                if self.options.use_pos:
-                    tag_mask = np.random.binomial(1, 1. - self.options.dropout, batch_size).astype(np.float32)
-                    scale = 3. / (2. * word_mask + tag_mask + 1e-12) if not self.options.use_char else 5. / (
-                    4. * word_mask + tag_mask + 1e-12)
-                    word_mask *= scale
-                    tag_mask *= scale
-                    word_mask = dy.inputTensor(word_mask, batched=True)
-                    tag_mask = dy.inputTensor(tag_mask, batched=True)
-                    ret.append((word_mask, tag_mask))
-                else:
-                    scale = 2. / (2. * word_mask + 1e-12) if not self.options.use_char else 4. / (
-                    4. * word_mask + 1e-12)
-                    word_mask *= scale
-                    word_mask = dy.inputTensor(word_mask, batched=True)
-                    ret.append(word_mask)
+                tag_mask = np.random.binomial(1, 1. - self.options.dropout, batch_size).astype(np.float32)
+                le_mask = np.random.binomial(1, 1. - self.options.dropout, batch_size).astype(np.float32)
+                scale =6. / (4. * word_mask + tag_mask + le_mask,  1e-12)
+                word_mask *= scale
+                tag_mask *= scale
+                le_mask *= scale
+                word_mask = dy.inputTensor(word_mask, batched=True)
+                tag_mask = dy.inputTensor(tag_mask, batched=True)
+                le_mask = dy.inputTensor(le_mask, batched=True)
+                ret.append((word_mask, tag_mask, le_mask))
+
             return ret
 
         self.generate_emb_mask = _emb_mask_generator
@@ -255,30 +219,27 @@ class MSTParserLSTM:
             cnn_reps = [list() for _ in range(len(words[lang]))]
             for i in range(len(words[lang])):
                 cnn_reps[i] = dy.pick_batch(crnns, [i * words[lang].shape[1] + j for j in range(words[lang].shape[1])], 1)
-            #wembed = [dy.lookup_batch(self.wlookup[lang], words[lang][i]) + dy.lookup_batch(self.elookup, pwords[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
-            wembed = [dy.lookup_batch(self.elookup, pwords[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
-            posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in range(len(pos_tags[lang]))] if self.options.use_pos else None
-            xwmbed = [dy.lookup_batch(self.xlookup, words[lang][i]) for i in range(len(words[lang]))]
-            lang_embeds = [dy.lookup_batch(self.lang_lookup, [self.lang2id[lang]]*len(pos_tags[lang][i])) for i in range(len(pos_tags[lang]))]
-
+            char_inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in cnn_reps]
+            wembed = [dy.lookup_batch(self.wlookup, pwords[lang][i]) + dy.lookup_batch(self.xlookup, words[lang][i]) + char_inputs[i] for
+                      i in range(len(words[lang]))]
+            posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in range(len(pos_tags[lang]))]
+            lang_embeds = [dy.lookup_batch(self.lang_lookup, [self.lang2id[lang]] * len(pos_tags[lang][i])) for i in
+                           range(len(pos_tags[lang]))]
             if not train:
-                inputs = [dy.concatenate([w, pos]) for w, pos in zip(wembed, posembed)] if self.options.use_pos else wembed
-                inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in inputs]
+                inputs = [dy.concatenate([w, pos, lembed]) for w, pos, lembed in zip(wembed, posembed, lang_embeds)]
             else:
-                emb_masks = self.generate_emb_mask(words[lang].shape[0], words[lang].shape[1])
-                inputs = [dy.concatenate([dy.cmult(w, wm), dy.cmult(pos, posm)]) for w, pos, (wm, posm) in
-                          zip(wembed, posembed, emb_masks)] if self.options.use_pos \
-                    else [dy.cmult(w, wm) for w, wm in zip(wembed, emb_masks)]
-                inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in inputs]
-            inputs = [dy.concatenate([inp, lembed, xe]) for inp, lembed,xe in zip(inputs, lang_embeds, xwmbed)]
+                emb_masks = self.generate_emb_mask(words.shape[0], words.shape[1])
+                inputs = [dy.concatenate([dy.cmult(w, wm), dy.cmult(pos, posm), dy.cmult(lembed, langm)])
+                          for w, pos, lembed, (wm, posm, langm) in zip(wembed, posembed, lang_embeds, emb_masks)]
+
             all_inputs[l] = inputs
 
-        lstm_input = [dy.concatenate_to_batch([all_inputs[j][i] for j in range(len(all_inputs))]) for i in
-                      range(len(all_inputs[0]))]
+        lstm_input = [dy.concatenate_to_batch([all_inputs[j][i] for j in range(len(all_inputs))])
+                      for i in range(len(all_inputs[0]))]
         d = self.options.dropout
         h_out = self.bi_rnn(lstm_input, lstm_input[0].dim()[1], d if train else 0, d if train else 0)
 
-        h =  dy.dropout_dim(dy.concatenate_cols(h_out), 1, d) if train else dy.concatenate_cols(h_out)
+        h = dy.dropout_dim(dy.concatenate_cols(h_out), 1, d) if train else dy.concatenate_cols(h_out)
         H = self.activation(dy.affine_transform([self.arc_mlp_head_b.expr(), self.arc_mlp_head.expr(), h]))
         M = self.activation(dy.affine_transform([self.arc_mlp_dep_b.expr(), self.arc_mlp_dep.expr(), h]))
         HL = self.activation(dy.affine_transform([self.label_mlp_head_b.expr(), self.label_mlp_head.expr(), h]))
@@ -288,7 +249,7 @@ class MSTParserLSTM:
             H, M, HL, ML =  dy.dropout_dim(H, 1, d),  dy.dropout_dim(M, 1, d),  dy.dropout_dim(HL, 1, d),  dy.dropout_dim(ML, 1, d)
         return H, M, HL, ML
 
-    def shared_rnn_mlp(self, batch, train):
+    def shared_rnn_mlp(self, batch, train): #todo old and deprecated
         '''
         Here, I assumed all sens have the same length.
         '''
@@ -303,24 +264,20 @@ class MSTParserLSTM:
             cnn_reps = [list() for _ in range(len(words[lang]))]
             for i in range(words[lang].shape[0]):
                 cnn_reps[i] = dy.pick_batch(crnns, char_batches[lang][i], 1)
-           # wembed = [dy.lookup_batch(self.wlookup[lang], words[lang][i]) + dy.lookup_batch(self.elookup, pwords[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
-            wembed = [dy.lookup_batch(self.elookup, pwords[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
-            posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in
-                        range(len(pos_tags[lang]))] if self.options.use_pos else None
-            xwmbed = [dy.lookup_batch(self.xlookup, words[lang][i]) for i in range(len(words[lang]))]
+            wembed = [dy.lookup_batch(self.elookup, pwords[lang][i]) + dy.lookup_batch(self.xlookup, words[lang][i]) for i in range(len(words[lang]))]
+            posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in range(len(pos_tags[lang]))]
             lang_embeds = [dy.lookup_batch(self.lang_lookup, [self.lang2id[lang]] * len(pos_tags[lang][i])) for i in
                            range(len(pos_tags[lang]))]
-
+            char_inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in cnn_reps]
             if not train:
-                inputs = [dy.concatenate([w, pos]) for w, pos in
-                          zip(wembed, posembed)] if self.options.use_pos else wembed
-                inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in inputs]
+                inputs = [dy.concatenate([w, pos, ch]) for w, pos, ch in
+                          zip(wembed, posembed, char_inputs)]
+                # inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in inputs]
             else:
                 emb_masks = self.generate_emb_mask(words[lang].shape[0], words[lang].shape[1])
-                inputs = [dy.concatenate([dy.cmult(w, wm), dy.cmult(pos, posm)]) for w, pos, (wm, posm) in
-                          zip(wembed, posembed, emb_masks)] if self.options.use_pos \
-                    else [dy.cmult(w, wm) for w, wm in zip(wembed, emb_masks)]
-                inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in inputs]
+                inputs = [dy.concatenate([dy.cmult(w, wm), dy.cmult(pos, posm), dy.cmult(ch, wm), lem]) for w, pos,ch, (wm, posm) in
+                          zip(wembed, posembed, char_inputs, emb_masks, lang_embeds)]
+                # inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in inputs]
             inputs = [dy.concatenate([inp, lembed, xe]) for inp, lembed, xe in zip(inputs, lang_embeds, xwmbed)]
             all_inputs[l] = inputs
 
@@ -540,10 +497,7 @@ class MSTParserLSTM:
             for lang in self.proj_mat.keys():
                 proj_mat_params[lang] = self.proj_mat[lang].expr().npvalue()
 
-            external_params = self.elookup.expr().npvalue()
-            # wlookup_params = dict()
-            # for lang in self.wlookup.keys():
-            #     wlookup_params[lang] = self.wlookup[lang].expr().npvalue()
+            wlookup_params = self.wlookup.expr().npvalue()
 
             clookup_params = dict()
             for lang in self.clookup.keys():
@@ -566,7 +520,7 @@ class MSTParserLSTM:
                          proj_mat_params, plookup_params, lang_lookup_params, arc_mlp_head_params,
                          arc_mlp_head_b_params, label_mlp_head_params, label_mlp_head_b_params, arc_mlp_dep_params,
                          arc_mlp_dep_b_params, label_mlp_dep_params,
-                         label_mlp_dep_b_params, w_arc_params, u_label_params, external_params), paramsfp)
+                         label_mlp_dep_b_params, w_arc_params, u_label_params, wlookup_params), paramsfp)
 
     # def load(self, path):
     #     with open(path, 'r') as paramsfp:

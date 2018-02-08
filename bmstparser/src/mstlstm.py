@@ -75,7 +75,6 @@ class MSTParserLSTM:
             else:
                 self.clookup[lang] = self.model.add_lookup_parameters((len(chars[lang]) + 2, options.ce))
 
-            if not options.tune_net: self.clookup[lang].set_updated(False)
 
             self.char_lstm[lang] = dy.BiRNNBuilder(1, options.ce, edim, self.model, dy.VanillaLSTMBuilder)
             if model_path:
@@ -84,7 +83,6 @@ class MSTParserLSTM:
                     params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
                     for j in range(len(params)):
                         params[j].set_value(char_lstm_params[lang][i][j])
-                        if not options.tune_net: params[j].set_updated(False)
 
             if model_path:
                 self.proj_mat[lang] = self.model.add_parameters((edim, edim), init=dy.NumpyInitializer(proj_mat_params[lang]))
@@ -106,7 +104,6 @@ class MSTParserLSTM:
                 params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
                 for j in range(len(params)):
                     params[j].set_value(deep_lstm_params[i][j])
-                    if not options.tune_net: params[j].set_updated(False)
 
         if not model_path:
             w_mlp_arc = orthonormal_initializer(options.arc_mlp, options.rnn * 2)

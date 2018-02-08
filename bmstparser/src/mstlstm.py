@@ -232,7 +232,7 @@ class MSTParserLSTM:
                 #           for w, pos, lembed, (wm, posm, langm) in zip(wembed, posembed, lang_embeds, emb_masks)]
 
                 inputs = [dy.concatenate([dy.cmult(w, wm), dy.cmult(pos, posm)])
-                          for w, pos, lembed, (wm, posm) in zip(wembed, posembed, emb_masks)]
+                          for w, pos, (wm, posm) in zip(wembed, posembed, emb_masks)]
 
             all_inputs[l] = inputs
 
@@ -277,10 +277,10 @@ class MSTParserLSTM:
                 # inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in inputs]
             else:
                 emb_masks = self.generate_emb_mask(words[lang].shape[0], words[lang].shape[1])
-                inputs = [dy.concatenate([dy.cmult(w, wm), dy.cmult(pos, posm), dy.cmult(ch, wm), lem]) for w, pos,ch, (wm, posm) in
+                inputs = [dy.concatenate([dy.cmult(w, wm), dy.cmult(pos, posm), dy.cmult(ch, wm)]) for w, pos,ch, (wm, posm) in
                           zip(wembed, posembed, char_inputs, emb_masks, lang_embeds)]
                 # inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in inputs]
-            inputs = [dy.concatenate([inp, lembed, xe]) for inp, lembed, xe in zip(inputs, lang_embeds, xwmbed)]
+            inputs = [dy.concatenate([inp, xe]) for inp, xe in zip(inputs, wembed)]
             all_inputs[l] = inputs
 
         lstm_input = [dy.concatenate_to_batch([all_inputs[j][i] for j in range(len(all_inputs))]) for i in range(len(all_inputs[0]))]

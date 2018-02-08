@@ -91,7 +91,7 @@ class MSTParserLSTM:
 
         input_dim = edim + options.pe
 
-        self.deep_lstms = dy.BiRNNBuilder(options.layer, input_dim + options.le + xdim, options.rnn * 2, self.model, dy.VanillaLSTMBuilder)
+        self.deep_lstms = dy.BiRNNBuilder(options.layer, input_dim, options.rnn * 2, self.model, dy.VanillaLSTMBuilder)
         if not model_path:
             for i in range(len(self.deep_lstms.builder_layers)):
                 builder = self.deep_lstms.builder_layers[i]

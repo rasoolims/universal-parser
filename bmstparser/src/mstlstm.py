@@ -89,7 +89,7 @@ class MSTParserLSTM:
             else:
                 self.proj_mat[lang] = self.model.add_parameters((edim, edim))
 
-        input_dim = edim + options.pe
+        input_dim = edim + options.pe + options.le
 
         self.deep_lstms = dy.BiRNNBuilder(options.layer, input_dim, options.rnn * 2, self.model, dy.VanillaLSTMBuilder)
         if not model_path:

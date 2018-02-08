@@ -147,7 +147,7 @@ class MSTParserLSTM:
                 word_mask = np.random.binomial(1, 1. - self.options.dropout, batch_size).astype(np.float32)
                 tag_mask = np.random.binomial(1, 1. - self.options.dropout, batch_size).astype(np.float32)
                 le_mask = np.random.binomial(1, 1. - self.options.dropout, batch_size).astype(np.float32)
-                scale =6. / (4. * word_mask + tag_mask + le_mask,  1e-12)
+                scale = 6. / (4. * word_mask + tag_mask + le_mask + 1e-12)
                 word_mask *= scale
                 tag_mask *= scale
                 le_mask *= scale

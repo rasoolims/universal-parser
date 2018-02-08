@@ -72,7 +72,7 @@ class MSTParserLSTM:
 
             if options.use_char:
                 self.clookup = self.model.add_lookup_parameters((len(chars) + 2, options.ce))
-                self.char_lstm = BiRNNBuilder(1, options.ce, edim, self.model, VanillaLSTMBuilder)
+                self.char_lstm = BiRNNBuilder(1, options.ce + options.le, edim, self.model, VanillaLSTMBuilder)
 
             self.a_wlookup = np.ndarray(shape=(options.we, len(w2i)+2), dtype=float)
             self.a_wlookup.fill(0)
@@ -119,7 +119,7 @@ class MSTParserLSTM:
                 self.a_lstms.append(this_layer)
 
             if options.use_char:
-                self.a_clookup = np.ndarray(shape=(options.ce, len(chars) + 2), dtype=float)
+                self.a_clookup = np.ndarray(shape=(options.ce + options.le, len(chars) + 2), dtype=float)
                 self.ac_lstms = []
                 for i in range(len(self.char_lstm.builder_layers)):
                     builder = self.char_lstm.builder_layers[i]
@@ -159,7 +159,7 @@ class MSTParserLSTM:
 
             if options.use_char:
                 self.clookup = self.model.add_lookup_parameters((len(chars) + 2, options.ce),  init=NumpyInitializer(from_model.a_clookup))
-                self.char_lstm = BiRNNBuilder(1, options.ce, edim, self.model, VanillaLSTMBuilder)
+                self.char_lstm = BiRNNBuilder(1, options.ce + options.le, edim, self.model, VanillaLSTMBuilder)
                 for i in range(len(self.char_lstm.builder_layers)):
                     builder = self.char_lstm.builder_layers[i]
                     params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
@@ -266,9 +266,9 @@ class MSTParserLSTM:
         '''
         Here, I assumed all sens have the same length.
         '''
-        words, pwords, pos, chars, langs = sens[0], sens[1], sens[2], sens[5], sens[6]
+        words, pwords, pos, chars, langs, clangs = sens[0], sens[1], sens[2], sens[5], sens[6], sens[7]
         if self.options.use_char:
-            cembed = [lookup_batch(self.clookup, c) for c in chars]
+            cembed = [concatenate([lookup_batch(self.clookup, c),lookup_batch(self.lang_lookup, l)]) for c, l in zip(chars, clangs)]
             char_fwd, char_bckd = self.char_lstm.builder_layers[0][0].initial_state().transduce(cembed)[-1],\
                                   self.char_lstm.builder_layers[0][1].initial_state().transduce(reversed(cembed))[-1]
             crnn = reshape(concatenate_cols([char_fwd, char_bckd]), (self.options.we, words.shape[0]*words.shape[1]))

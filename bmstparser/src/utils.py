@@ -148,9 +148,22 @@ def add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model, is_train):
                 offset += 1
         chars[c_pos] = np.array(ch)
     chars = np.array(chars)
+
+    clangs = [list() for _ in range(cur_c_len)]
+    for c_pos in range(cur_c_len):
+        ch = [model.PAD] * (len(batch) * cur_len)
+        offset = 0
+        for w_pos in range(cur_len):
+            for sen_position in range(len(batch)):
+                if w_pos < len(batch[sen_position]) and c_pos < len(batch[sen_position][w_pos].norm):
+                    ch[offset] = model.langs.get(batch[sen_position][1].feats, 0)
+                offset += 1
+        clangs[c_pos] = np.array(ch)
+    clangs = np.array(clangs)
+
     masks = np.array([np.array([1 if 0 < j < len(batch[i]) and (batch[i][j].head>=0 or not is_train) else 0 for i in range(len(batch))]) for j in
                       range(cur_len)])
-    mini_batches.append((words, pwords, pos, heads, relations, chars,langs, masks))
+    mini_batches.append((words, pwords, pos, heads, relations, chars,langs,clangs, masks))
 
 
 def is_punc(pos):

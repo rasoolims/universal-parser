@@ -40,6 +40,7 @@ if __name__ == '__main__':
     parser.add_option("--pe", type="int", dest="pe", default=100)
     parser.add_option("--ce", type="int", dest="ce", default=100)
     parser.add_option("--re", type="int", dest="re", default=25)
+    parser.add_option("--le", type="int", dest="le", default=25)
     parser.add_option("--t", type="int", dest="t", default=50000)
     parser.add_option("--epoch", type="int", dest="epoch", default=1000)
     parser.add_option("--arc_mlp", type="int", dest="arc_mlp", default=400)
@@ -67,7 +68,7 @@ if __name__ == '__main__':
     print 'Using external embedding:', options.external_embedding
     if options.predictFlag:
         with open(options.params, 'r') as paramsfp:
-            w2i, pos, rels, chars, stored_opt = pickle.load(paramsfp)
+            w2i, pos, rels, chars, langs, stored_opt = pickle.load(paramsfp)
         stored_opt.external_embedding = options.external_embedding
         print stored_opt
         print 'Initializing lstm mstparser:'
@@ -85,14 +86,14 @@ if __name__ == '__main__':
         print 'Finished predicting test.', te-ts, 'seconds.'
     else:
         print 'Preparing vocab'
-        w2i, pos, rels, chars = utils.vocab(options.conll_train)
+        w2i, pos, rels, chars, langs = utils.vocab(options.conll_train)
         if not os.path.isdir(options.output): os.mkdir(options.output)
         with open(os.path.join(options.output, options.params), 'w') as paramsfp:
-            pickle.dump((w2i, pos, rels, chars, options), paramsfp)
+            pickle.dump((w2i, pos, rels, chars, langs, options), paramsfp)
         print 'Finished collecting vocab'
 
         print 'Initializing lstm mstparser:'
-        parser = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, options)
+        parser = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, langs, options)
         best_acc = -float('inf')
         t, epoch = 0,1
         train_data = list(utils.read_conll(open(options.conll_train, 'r')))
@@ -133,7 +134,7 @@ if __name__ == '__main__':
                                 no_improvement = 0
                             else:
                                 no_improvement += 1
-                        avg_model = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, options, parser)
+                        avg_model = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, langs, options, parser)
                         uas, las = test(avg_model, dev_buckets, options.conll_dev, options.output+'/dev.out')
                         print 'dev avg acc', las, uas
                         if las > best_las:
@@ -152,7 +153,7 @@ if __name__ == '__main__':
             epoch+=1
 
         if not options.conll_dev:
-            avg_model = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, options, parser)
+            avg_model = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, langs, options, parser)
             print 'Saving default model without dev-tuning'
             avg_model.Save(options.output + '/model')
 

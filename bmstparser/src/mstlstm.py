@@ -7,7 +7,7 @@ import codecs
 from linalg import *
 
 class MSTParserLSTM:
-    def __init__(self, pos, rels, w2i, chars, options, from_model=None):
+    def __init__(self, pos, rels, w2i, chars, langs, options, from_model=None):
         self.model = Model()
         self.PAD = 1
         self.options = options
@@ -16,6 +16,8 @@ class MSTParserLSTM:
         self.activation = self.activations[options.activation]
         self.dropout = False if options.dropout == 0.0 else True
         self.vocab = {word: ind + 2 for word, ind in w2i.iteritems()}
+        self.langs = {lang: ind + 2 for ind,lang in enumerate(langs)}
+        print self.langs
         self.pos = {word: ind + 2 for ind, word in enumerate(pos)}
         self.rels = {word: ind + 1 for ind, word in enumerate(rels)}
         self.chars = {c: i + 2 for i, c in enumerate(chars)}
@@ -25,6 +27,7 @@ class MSTParserLSTM:
         edim = options.we
         if not from_model:
             self.wlookup = self.model.add_lookup_parameters((len(w2i) + 2, edim))
+            self.lang_lookup = self.model.add_lookup_parameters((len(langs) + 2, options.le))
             self.elookup = None
             if options.external_embedding is not None:
                 external_embedding_fp = gzip.open(options.external_embedding, 'r')
@@ -73,6 +76,8 @@ class MSTParserLSTM:
 
             self.a_wlookup = np.ndarray(shape=(options.we, len(w2i)+2), dtype=float)
             self.a_wlookup.fill(0)
+            self.a_lang_lookup = np.ndarray(shape=(options.le, len(langs) + 2), dtype=float)
+            self.a_lang_lookup.fill(0)
             self.a_plookup = np.ndarray(shape=(options.pe, len(pos)+2), dtype=float)
             self.a_plookup.fill(0)
             self.a_arc_mlp_head = np.ndarray(shape=(options.arc_mlp, options.rnn * 2), dtype=float)
@@ -129,6 +134,7 @@ class MSTParserLSTM:
                     self.ac_lstms.append(this_layer)
         else:
             self.wlookup = self.model.add_lookup_parameters((len(w2i) + 2, edim), init=NumpyInitializer(from_model.a_wlookup))
+            self.lang_lookup = self.model.add_lookup_parameters((len(langs) + 2, options.le), init=NumpyInitializer(from_model.a_lang_lookup))
             if from_model.evocab:
                 self.evocab = from_model.evocab
                 self.elookup =  self.model.add_lookup_parameters((len(self.evocab) + 2, edim), init=NumpyInitializer(from_model.elookup.expr().npvalue()))
@@ -183,6 +189,7 @@ class MSTParserLSTM:
 
     def moving_avg(self, r1, r2):
         self.a_wlookup = r1 * self.a_wlookup + r2 * self.wlookup.expr().npvalue()
+        self.a_lang_lookup = r1 * self.a_lang_lookup + r2 * self.lang_lookup.expr().npvalue()
         self.a_plookup = r1 * self.a_plookup + r2 * self.plookup.expr().npvalue()
         self.a_arc_mlp_head = r1 * self.a_arc_mlp_head + r2 * self.arc_mlp_head.expr().npvalue()
         self.a_arc_mlp_head_b = r1 * self.a_arc_mlp_head_b + r2 * self.arc_mlp_head_b.expr().npvalue()
@@ -259,7 +266,7 @@ class MSTParserLSTM:
         '''
         Here, I assumed all sens have the same length.
         '''
-        words, pwords, pos, chars = sens[0], sens[1], sens[2], sens[5]
+        words, pwords, pos, chars, langs = sens[0], sens[1], sens[2], sens[5], sens[6]
         if self.options.use_char:
             cembed = [lookup_batch(self.clookup, c) for c in chars]
             char_fwd, char_bckd = self.char_lstm.builder_layers[0][0].initial_state().transduce(cembed)[-1],\

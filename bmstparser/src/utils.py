@@ -30,6 +30,7 @@ def vocab(conll_path, min_count=2):
     wordsCount = Counter()
     posCount = Counter()
     relCount = Counter()
+    langs = set()
     chars = set()
     with open(conll_path, 'r') as conllFP:
         for sentence in read_conll(conllFP):
@@ -39,12 +40,13 @@ def vocab(conll_path, min_count=2):
             for node in sentence:
                 for c in list(node.norm):
                     chars.add(c.lower())
+            langs.add(sentence[1].feats)
 
     words = set()
     for w in wordsCount.keys():
         if wordsCount[w]>=min_count:
             words.add(w)
-    return ({w: i for i, w in enumerate(words)}, list(posCount.keys()), list(relCount.keys()), list(chars))
+    return ({w: i for i, w in enumerate(words)}, list(posCount.keys()), list(relCount.keys()), list(chars), list(sorted(langs)))
 
 def read_conll(fh):
     root = ConllEntry(0, '*root*', '*root*', 'ROOT-POS', 'ROOT-FPOS', '_', 0, 'root', '_', '_')
@@ -126,6 +128,9 @@ def add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model, is_train):
     pos = np.array([np.array(
         [model.pos.get(batch[i][j].pos, 0) if j < len(batch[i]) else model.PAD for i in
          range(len(batch))]) for j in range(cur_len)])
+    langs = np.array([np.array(
+        [model.langs.get(batch[i][j].feats, 0) if j < len(batch[i]) else model.PAD for i in
+         range(len(batch))]) for j in range(cur_len)])
     heads = np.array(
         [np.array([batch[i][j].head if 0 < j < len(batch[i]) and batch[i][j].head>=0 else 0 for i in range(len(batch))]) for j
          in range(cur_len)])
@@ -145,7 +150,7 @@ def add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model, is_train):
     chars = np.array(chars)
     masks = np.array([np.array([1 if 0 < j < len(batch[i]) and (batch[i][j].head>=0 or not is_train) else 0 for i in range(len(batch))]) for j in
                       range(cur_len)])
-    mini_batches.append((words, pwords, pos, heads, relations, chars, masks))
+    mini_batches.append((words, pwords, pos, heads, relations, langs, chars, masks))
 
 
 def is_punc(pos):

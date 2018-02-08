@@ -119,7 +119,7 @@ class MSTParserLSTM:
                 self.a_lstms.append(this_layer)
 
             if options.use_char:
-                self.a_clookup = np.ndarray(shape=(options.ce + options.le, len(chars) + 2), dtype=float)
+                self.a_clookup = np.ndarray(shape=(options.ce, len(chars) + 2), dtype=float)
                 self.ac_lstms = []
                 for i in range(len(self.char_lstm.builder_layers)):
                     builder = self.char_lstm.builder_layers[i]

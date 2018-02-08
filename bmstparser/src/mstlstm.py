@@ -89,7 +89,7 @@ class MSTParserLSTM:
             else:
                 self.proj_mat[lang] = self.model.add_parameters((edim, edim))
 
-        input_dim = edim + options.pe + options.le
+        input_dim = edim + options.pe #+ options.le
 
         self.deep_lstms = dy.BiRNNBuilder(options.layer, input_dim, options.rnn * 2, self.model, dy.VanillaLSTMBuilder)
         if not model_path:
@@ -221,14 +221,18 @@ class MSTParserLSTM:
             #           i in range(len(words[lang]))]
             wembed = [dy.lookup_batch(self.wlookup, pwords[lang][i]) + dy.lookup_batch(self.xlookup, words[lang][i])  for i in range(len(words[lang]))]
             posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in range(len(pos_tags[lang]))]
-            lang_embeds = [dy.lookup_batch(self.lang_lookup, [self.lang2id[lang]] * len(pos_tags[lang][i])) for i in
-                           range(len(pos_tags[lang]))]
+            # lang_embeds = [dy.lookup_batch(self.lang_lookup, [self.lang2id[lang]] * len(pos_tags[lang][i])) for i in
+            #                range(len(pos_tags[lang]))]
             if not train:
-                inputs = [dy.concatenate([w, pos, lembed]) for w, pos, lembed in zip(wembed, posembed, lang_embeds)]
+                # inputs = [dy.concatenate([w, pos, lembed]) for w, pos, lembed in zip(wembed, posembed, lang_embeds)]
+                inputs = [dy.concatenate([w, pos]) for w, pos in zip(wembed, posembed)]
             else:
                 emb_masks = self.generate_emb_mask(words[lang].shape[0], words[lang].shape[1])
-                inputs = [dy.concatenate([dy.cmult(w, wm), dy.cmult(pos, posm), dy.cmult(lembed, langm)])
-                          for w, pos, lembed, (wm, posm, langm) in zip(wembed, posembed, lang_embeds, emb_masks)]
+                # inputs = [dy.concatenate([dy.cmult(w, wm), dy.cmult(pos, posm), dy.cmult(lembed, langm)])
+                #           for w, pos, lembed, (wm, posm, langm) in zip(wembed, posembed, lang_embeds, emb_masks)]
+
+                inputs = [dy.concatenate([dy.cmult(w, wm), dy.cmult(pos, posm)])
+                          for w, pos, lembed, (wm, posm) in zip(wembed, posembed, emb_masks)]
 
             all_inputs[l] = inputs
 

@@ -17,7 +17,6 @@ class MSTParserLSTM:
         self.dropout = False if options.dropout == 0.0 else True
         self.vocab = {word: ind + 2 for word, ind in w2i.iteritems()}
         self.langs = {lang: ind + 2 for ind,lang in enumerate(langs)}
-        print self.langs
         self.pos = {word: ind + 2 for ind, word in enumerate(pos)}
         self.rels = {word: ind + 1 for ind, word in enumerate(rels)}
         self.chars = {c: i + 2 for i, c in enumerate(chars)}
@@ -62,7 +61,7 @@ class MSTParserLSTM:
             self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init = ConstInitializer(0))
             self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp+1), init = ConstInitializer(0))
             self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp+1), options.label_mlp+1), init = ConstInitializer(0))
-            input_dim = edim + options.pe if self.options.use_pos else edim
+            input_dim = edim + options.pe + options.le if self.options.use_pos else edim
             self.deep_lstms = BiRNNBuilder(options.layer, input_dim, options.rnn * 2, self.model, VanillaLSTMBuilder)
             for i in range(len(self.deep_lstms.builder_layers)):
                 builder = self.deep_lstms.builder_layers[i]
@@ -149,7 +148,7 @@ class MSTParserLSTM:
             self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init = NumpyInitializer(from_model.a_label_mlp_dep_b))
             self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp + 1), init = NumpyInitializer(from_model.a_w_arc))
             self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp + 1), options.label_mlp + 1),init = NumpyInitializer(from_model.a_u_label))
-            input_dim = edim + options.pe if self.options.use_pos else edim
+            input_dim = edim + options.pe + options.le if self.options.use_pos else edim
             self.deep_lstms = BiRNNBuilder(options.layer, input_dim, options.rnn * 2, self.model, VanillaLSTMBuilder)
             for i in range(len(self.deep_lstms.builder_layers)):
                 builder = self.deep_lstms.builder_layers[i]
@@ -170,14 +169,17 @@ class MSTParserLSTM:
             ret = []
             for _ in xrange(seq_len):
                 word_mask = np.random.binomial(1, 1. - self.options.dropout, batch_size).astype(np.float32)
+                le_mask = np.random.binomial(1, 1. - self.options.dropout, batch_size).astype(np.float32)
                 if self.options.use_pos:
                     tag_mask = np.random.binomial(1, 1. - self.options.dropout, batch_size).astype(np.float32)
-                    scale = 3. / (2. * word_mask + tag_mask + 1e-12) if not self.options.use_char else 5. / (4. * word_mask + tag_mask + 1e-12)
+                    scale = 4. / (2. * word_mask + tag_mask + le_mask+ 1e-12) if not self.options.use_char else 6. / (4. * word_mask + tag_mask + le_mask + 1e-12)
                     word_mask *= scale
                     tag_mask *= scale
+                    le_mask *= scale
                     word_mask = inputTensor(word_mask, batched=True)
                     tag_mask = inputTensor(tag_mask, batched=True)
-                    ret.append((word_mask, tag_mask))
+                    le_mask = inputTensor(le_mask, batched=True)
+                    ret.append((word_mask, tag_mask, le_mask))
                 else:
                     scale = 2. / (2. * word_mask + 1e-12) if not self.options.use_char else 4. / (4. * word_mask + 1e-12)
                     word_mask *= scale
@@ -280,12 +282,13 @@ class MSTParserLSTM:
         else:
             wembed = [lookup_batch(self.wlookup, words[i]) + lookup_batch(self.elookup, pwords[i]) for i in range(len(words))]
         posembed = [lookup_batch(self.plookup, pos[i]) for i in range(len(pos))] if self.options.use_pos else None
+        lembeds = [lookup_batch(self.lang_lookup, langs[i]) for i in range(len(langs))]
 
         if not train:
-            inputs = [concatenate([w, pos]) for w, pos in zip(wembed, posembed)] if self.options.use_pos else wembed
+            inputs = [concatenate([w, pos, lembed]) for w, pos, lembed in zip(wembed, posembed, lembeds)] if self.options.use_pos else wembed
         else:
             emb_masks = self.generate_emb_mask(words.shape[0], words.shape[1])
-            inputs = [concatenate([cmult(w, wm), cmult(pos, posm)]) for w, pos, (wm, posm) in zip(wembed, posembed, emb_masks)] if self.options.use_pos\
+            inputs = [concatenate([cmult(w, wm), cmult(pos, posm), cmult(lembed, lem)]) for w, pos,lembed, (wm, posm, lem) in zip(wembed, posembed, lembeds, emb_masks)] if self.options.use_pos\
                 else [cmult(w, wm) for w, wm in zip(wembed, emb_masks)]
 
         d = self.options.dropout

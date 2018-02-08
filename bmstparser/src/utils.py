@@ -150,7 +150,7 @@ def add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model, is_train):
     chars = np.array(chars)
     masks = np.array([np.array([1 if 0 < j < len(batch[i]) and (batch[i][j].head>=0 or not is_train) else 0 for i in range(len(batch))]) for j in
                       range(cur_len)])
-    mini_batches.append((words, pwords, pos, heads, relations, langs, chars, masks))
+    mini_batches.append((words, pwords, pos, heads, relations, chars,langs, masks))
 
 
 def is_punc(pos):

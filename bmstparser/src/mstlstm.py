@@ -46,12 +46,27 @@ class MSTParserLSTM:
 
         self.chars = dict()
         self.evocab = dict()
-        self.vocab = dict()
         self.char_lstm = dict()
         self.clookup = dict()
         self.proj_mat = dict()
         external_embedding = dict()
         word_index = 2
+
+        exfp = gzip.open(options.external_embedding, 'r')
+        xemb = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in exfp if len(line.split(' ')) > 2}
+        exfp.close()
+        self.xvocab = {word: i + 2 for i, word in enumerate(xemb)}
+        xdim = len(xemb.values()[0])
+        self.xlookup = self.model.add_lookup_parameters((len(xemb) + 2, xdim))
+        self.xlookup.set_updated(False)
+        self.xlookup.init_row(0, [0] * xdim)
+        self.xlookup.init_row(1, [0] * xdim)
+        for word in xemb.keys():
+            self.xlookup.init_row(self.xvocab[word], xemb[word])
+            if word == '_UNK_':
+                self.xlookup.init_row(0, xemb[word])
+        print 'Initialized with pre-trained code-switched embedding. Vector dimensions', xdim, 'and', len(xemb)
+
         for f in os.listdir(options.external_embedding):
             lang = f[:-3]
             external_embedding[lang] = dict()
@@ -110,7 +125,7 @@ class MSTParserLSTM:
 
         input_dim = edim + options.pe if self.options.use_pos else edim
 
-        self.deep_lstms = dy.BiRNNBuilder(options.layer, input_dim + options.le, options.rnn * 2, self.model, dy.VanillaLSTMBuilder)
+        self.deep_lstms = dy.BiRNNBuilder(options.layer, input_dim + options.le + xdim, options.rnn * 2, self.model, dy.VanillaLSTMBuilder)
         if not model_path:
             for i in range(len(self.deep_lstms.builder_layers)):
                 builder = self.deep_lstms.builder_layers[i]
@@ -243,6 +258,7 @@ class MSTParserLSTM:
             #wembed = [dy.lookup_batch(self.wlookup[lang], words[lang][i]) + dy.lookup_batch(self.elookup, pwords[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
             wembed = [dy.lookup_batch(self.elookup, pwords[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
             posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in range(len(pos_tags[lang]))] if self.options.use_pos else None
+            xwmbed = [dy.lookup_batch(self.xlookup, words[lang][i]) for i in range(len(words[lang]))]
             lang_embeds = [dy.lookup_batch(self.lang_lookup, [self.lang2id[lang]]*len(pos_tags[lang][i])) for i in range(len(pos_tags[lang]))]
 
             if not train:
@@ -254,7 +270,7 @@ class MSTParserLSTM:
                           zip(wembed, posembed, emb_masks)] if self.options.use_pos \
                     else [dy.cmult(w, wm) for w, wm in zip(wembed, emb_masks)]
                 inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in inputs]
-            inputs = [dy.concatenate([inp, lembed]) for inp, lembed in zip(inputs, lang_embeds)]
+            inputs = [dy.concatenate([inp, lembed, xe]) for inp, lembed,xe in zip(inputs, lang_embeds, xwmbed)]
             all_inputs[l] = inputs
 
         lstm_input = [dy.concatenate_to_batch([all_inputs[j][i] for j in range(len(all_inputs))]) for i in
@@ -291,6 +307,7 @@ class MSTParserLSTM:
             wembed = [dy.lookup_batch(self.elookup, pwords[lang][i]) + cnn_reps[i] for i in range(len(words[lang]))]
             posembed = [dy.lookup_batch(self.plookup, pos_tags[lang][i]) for i in
                         range(len(pos_tags[lang]))] if self.options.use_pos else None
+            xwmbed = [dy.lookup_batch(self.xlookup, words[lang][i]) for i in range(len(words[lang]))]
             lang_embeds = [dy.lookup_batch(self.lang_lookup, [self.lang2id[lang]] * len(pos_tags[lang][i])) for i in
                            range(len(pos_tags[lang]))]
 
@@ -304,7 +321,7 @@ class MSTParserLSTM:
                           zip(wembed, posembed, emb_masks)] if self.options.use_pos \
                     else [dy.cmult(w, wm) for w, wm in zip(wembed, emb_masks)]
                 inputs = [dy.tanh(self.proj_mat[lang].expr() * inp) for inp in inputs]
-            inputs = [dy.concatenate([inp, lembed]) for inp, lembed in zip(inputs, lang_embeds)]
+            inputs = [dy.concatenate([inp, lembed, xe]) for inp, lembed, xe in zip(inputs, lang_embeds, xwmbed)]
             all_inputs[l] = inputs
 
         lstm_input = [dy.concatenate_to_batch([all_inputs[j][i] for j in range(len(all_inputs))]) for i in range(len(all_inputs[0]))]

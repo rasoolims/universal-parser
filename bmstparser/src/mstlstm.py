@@ -232,7 +232,7 @@ class MSTParserLSTM:
                 #           for w, pos, lembed, (wm, posm, langm) in zip(wembed, posembed, lang_embeds, emb_masks)]
 
                 inputs = [dy.concatenate([dy.cmult(w, wm), dy.cmult(pos, posm)])
-                          for w, pos, (wm, posm) in zip(wembed, posembed, emb_masks)]
+                          for w, pos, (wm, posm, lemb) in zip(wembed, posembed, emb_masks)]
 
             all_inputs[l] = inputs
 

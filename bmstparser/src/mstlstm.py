@@ -52,7 +52,7 @@ class MSTParserLSTM:
         external_embedding = dict()
         word_index = 2
 
-        exfp = gzip.open(options.external_embedding, 'r')
+        exfp = gzip.open(options.xe, 'r')
         xemb = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in exfp if len(line.split(' ')) > 2}
         exfp.close()
         self.xvocab = {word: i + 2 for i, word in enumerate(xemb)}

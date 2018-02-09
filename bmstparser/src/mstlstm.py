@@ -62,7 +62,7 @@ class MSTParserLSTM:
             self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp+1), init = ConstInitializer(0))
             self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp+1), options.label_mlp+1), init = ConstInitializer(0))
 
-            input_dim = edim + options.pe + options.le if self.options.use_pos else edim
+            input_dim = edim + options.pe  if self.options.use_pos else edim
             self.deep_lstms = BiRNNBuilder(options.layer, input_dim, options.rnn * 2, self.model, VanillaLSTMBuilder)
             for i in range(len(self.deep_lstms.builder_layers)):
                 builder = self.deep_lstms.builder_layers[i]
@@ -72,7 +72,7 @@ class MSTParserLSTM:
 
             if options.use_char:
                 self.clookup = self.model.add_lookup_parameters((len(chars) + 2, options.ce))
-                self.char_lstm = BiRNNBuilder(1, options.ce + options.le, edim, self.model, VanillaLSTMBuilder)
+                self.char_lstm = BiRNNBuilder(1, options.ce, edim, self.model, VanillaLSTMBuilder)
 
             self.a_wlookup = np.ndarray(shape=(options.we, len(w2i)+2), dtype=float)
             self.a_wlookup.fill(0)
@@ -149,7 +149,7 @@ class MSTParserLSTM:
             self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init = NumpyInitializer(from_model.a_label_mlp_dep_b))
             self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp + 1), init = NumpyInitializer(from_model.a_w_arc))
             self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp + 1), options.label_mlp + 1),init = NumpyInitializer(from_model.a_u_label))
-            input_dim = edim + options.pe + options.le if self.options.use_pos else edim
+            input_dim = edim + options.pe  if self.options.use_pos else edim
             self.deep_lstms = BiRNNBuilder(options.layer, input_dim, options.rnn * 2, self.model, VanillaLSTMBuilder)
             for i in range(len(self.deep_lstms.builder_layers)):
                 builder = self.deep_lstms.builder_layers[i]
@@ -159,7 +159,7 @@ class MSTParserLSTM:
 
             if options.use_char:
                 self.clookup = self.model.add_lookup_parameters((len(chars) + 2, options.ce),  init=NumpyInitializer(from_model.a_clookup))
-                self.char_lstm = BiRNNBuilder(1, options.ce + options.le, edim, self.model, VanillaLSTMBuilder)
+                self.char_lstm = BiRNNBuilder(1, options.ce, edim, self.model, VanillaLSTMBuilder)
                 for i in range(len(self.char_lstm.builder_layers)):
                     builder = self.char_lstm.builder_layers[i]
                     params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
@@ -272,7 +272,7 @@ class MSTParserLSTM:
         '''
         words, pwords, pos, chars, langs, clangs = sens[0], sens[1], sens[2], sens[5], sens[6], sens[7]
         if self.options.use_char:
-            cembed = [concatenate([lookup_batch(self.clookup, c),lookup_batch(self.lang_lookup, l)]) for c, l in zip(chars, clangs)]
+            cembed = [concatenate([lookup_batch(self.clookup, c)]) for c in chars]
             char_fwd, char_bckd = self.char_lstm.builder_layers[0][0].initial_state().transduce(cembed)[-1],\
                                   self.char_lstm.builder_layers[0][1].initial_state().transduce(reversed(cembed))[-1]
             crnn = reshape(concatenate_cols([char_fwd, char_bckd]), (self.options.we, words.shape[0]*words.shape[1]))
@@ -287,10 +287,10 @@ class MSTParserLSTM:
         lembeds = [lookup_batch(self.lang_lookup, langs[i]) for i in range(len(langs))]
 
         if not train:
-            inputs = [concatenate([w, pos, lembed]) for w, pos, lembed in zip(wembed, posembed, lembeds)] if self.options.use_pos else wembed
+            inputs = [concatenate([w, pos]) for w, pos in zip(wembed, posembed)] if self.options.use_pos else wembed
         else:
             emb_masks = self.generate_emb_mask(words.shape[0], words.shape[1])
-            inputs = [concatenate([cmult(w, wm), cmult(pos, posm), cmult(lembed, lem)]) for w, pos,lembed, (wm, posm, lem) in zip(wembed, posembed, lembeds, emb_masks)] if self.options.use_pos\
+            inputs = [concatenate([cmult(w, wm), cmult(pos, posm)]) for w, pos, (wm, posm, lem) in zip(wembed, posembed, emb_masks)] if self.options.use_pos\
                 else [cmult(w, wm) for w, wm in zip(wembed, emb_masks)]
 
         d = self.options.dropout

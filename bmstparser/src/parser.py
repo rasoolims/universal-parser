@@ -50,6 +50,7 @@ if __name__ == '__main__':
     parser.add_option("--beta2", type="float", dest="beta2", default=0.9)
     parser.add_option("--dropout", type="float", dest="dropout", default=0.33)
     parser.add_option("--outdir", type="string", dest="output", default="results")
+    parser.add_option("--target", type="string", dest="target", help="target language", default=None)
     parser.add_option("--activation", type="string", dest="activation", default="leaky")
     parser.add_option("--layer", type="int", dest="layer", default=3)
     parser.add_option("--rnn", type="int", dest="rnn", help='dimension of rnn in each direction', default=200)

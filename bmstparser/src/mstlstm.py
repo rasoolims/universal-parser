@@ -189,6 +189,7 @@ class MSTParserLSTM:
             return ret
 
         self.generate_emb_mask = _emb_mask_generator
+        self.target = self.langs[options.target]
 
     def moving_avg(self, r1, r2):
         self.a_wlookup = r1 * self.a_wlookup + r2 * self.wlookup.expr().npvalue()

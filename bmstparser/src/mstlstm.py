@@ -51,17 +51,17 @@ class MSTParserLSTM:
 
             w_mlp_arc = orthonormal_initializer(options.arc_mlp, options.rnn * 2)
             w_mlp_label = orthonormal_initializer(options.label_mlp, options.rnn * 2)
-            self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init= NumpyInitializer(w_mlp_arc))
+            self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.le + options.rnn * 2), init= NumpyInitializer(w_mlp_arc))
             self.arc_mlp_head_b = self.model.add_parameters((options.arc_mlp,), init = ConstInitializer(0))
-            self.label_mlp_head = self.model.add_parameters((options.label_mlp, options.rnn * 2), init= NumpyInitializer(w_mlp_label))
+            self.label_mlp_head = self.model.add_parameters((options.label_mlp, options.le + options.rnn * 2), init= NumpyInitializer(w_mlp_label))
             self.label_mlp_head_b = self.model.add_parameters((options.label_mlp,), init = ConstInitializer(0))
-            self.arc_mlp_dep = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init= NumpyInitializer(w_mlp_arc))
+            self.arc_mlp_dep = self.model.add_parameters((options.arc_mlp, options.le + options.rnn * 2), init= NumpyInitializer(w_mlp_arc))
             self.arc_mlp_dep_b = self.model.add_parameters((options.arc_mlp,), init = ConstInitializer(0))
-            self.label_mlp_dep = self.model.add_parameters((options.label_mlp, options.rnn * 2), init= NumpyInitializer(w_mlp_label))
+            self.label_mlp_dep = self.model.add_parameters((options.label_mlp, options.le + options.rnn * 2), init= NumpyInitializer(w_mlp_label))
             self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init = ConstInitializer(0))
             self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp+1), init = ConstInitializer(0))
             self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp+1), options.label_mlp+1), init = ConstInitializer(0))
-            input_dim = edim + options.pe  if self.options.use_pos else edim
+            input_dim = edim + options.pe if self.options.use_pos else edim
             self.deep_lstms = BiRNNBuilder(options.layer, input_dim, options.rnn * 2, self.model, VanillaLSTMBuilder)
             for i in range(len(self.deep_lstms.builder_layers)):
                 builder = self.deep_lstms.builder_layers[i]

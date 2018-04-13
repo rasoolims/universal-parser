@@ -100,7 +100,7 @@ if __name__ == '__main__':
         min_len = min([len(d) for d in train_data])
         buckets = [list() for i in range(min_len, max_len)]
         for d in train_data:
-            buckets[len(d)-min_len-1].append(d)
+            buckets[min(0,len(d)-min_len-1)].append(d)
         buckets = [x for x in buckets if x != []]
         dev_buckets = [list()]
         if options.conll_dev:

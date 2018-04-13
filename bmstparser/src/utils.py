@@ -121,7 +121,7 @@ def add_to_minibatch(batch, cur_c_len, cur_len, mini_batches, model, is_train):
         [model.vocab.get(batch[i][j].norm, 0) if j < len(batch[i]) else model.PAD for i in
          range(len(batch))]) for j in range(cur_len)])
     pwords = np.array([np.array(
-        [model.evocab.get(batch[i][j].norm, 0) if j < len(batch[i]) else 0 for i in
+        [model.evocab.get(batch[i][j].norm, 0) if j < len(batch[i]) else model.PAD for i in
          range(len(batch))]) for j in range(cur_len)])
     pos = np.array([np.array(
         [model.pos.get(batch[i][j].pos, 0) if j < len(batch[i]) else model.PAD for i in

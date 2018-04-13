@@ -98,7 +98,7 @@ if __name__ == '__main__':
         train_data = list(utils.read_conll(open(options.conll_train, 'r')))
         max_len = max([len(d) for d in train_data])
         min_len = min([len(d) for d in train_data])
-        buckets = [list() for i in range(min_len, max_len)]
+        buckets = [list() for i in range(min_len, max_len+1)]
         for d in train_data:
             buckets[min(0,len(d)-min_len-1)].append(d)
         buckets = [x for x in buckets if x != []]

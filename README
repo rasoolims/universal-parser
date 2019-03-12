@@ -1,0 +1,8 @@
+# Requirement
+* Python 2.7 or higher
+* Dynet library
+
+
+Run with parser.py --help to see the options for training/testing. 
+
+This code is a modification of BistParser with adaptations from Dozat and Manning (2016).

@@ -69,7 +69,7 @@ class MSTParserLSTM:
 
             if options.use_char:
                 self.clookup = self.model.add_lookup_parameters((len(chars) + 2, options.ce))
-                self.char_lstm = BiRNNBuilder(1, options.ce, edim/2, self.model, VanillaLSTMBuilder)
+                self.char_lstm = BiRNNBuilder(1, options.ce, edim, self.model, VanillaLSTMBuilder)
 
             self.a_wlookup = np.ndarray(shape=(options.we, len(w2i)+2), dtype=float)
             self.a_wlookup.fill(0)

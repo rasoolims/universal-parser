@@ -1,7 +1,8 @@
 from collections import Counter
 import re, codecs,sys, random
 import numpy as np
-reload(sys)
+import importlib
+importlib.reload(sys)
 sys.setdefaultencoding('utf8')
 
 class ConllEntry:
@@ -41,7 +42,7 @@ def vocab(conll_path, min_count=2):
                     chars.add(c.lower())
 
     words = set()
-    for w in wordsCount.keys():
+    for w in list(wordsCount.keys()):
         if wordsCount[w]>=min_count:
             words.add(w)
     return ({w: i for i, w in enumerate(words)}, list(posCount.keys()), list(relCount.keys()), list(chars))
@@ -66,7 +67,7 @@ def write_conll(fn, conll_gen):
     with codecs.open(fn, 'w', encoding='utf-8') as fh:
         for sentence in conll_gen:
             for entry in sentence[1:]:
-                fh.write(str(entry) + u'\n')
+                fh.write(str(entry) + '\n')
             fh.write('\n')
 
 def eval(gold, predicted):

@@ -15,7 +15,7 @@ class MSTParserLSTM:
         self.activations = {'tanh': tanh, 'sigmoid': logistic, 'relu': rectify, 'leaky': (lambda x: bmax(.1 * x, x))}
         self.activation = self.activations[options.activation]
         self.dropout = False if options.dropout == 0.0 else True
-        self.vocab = {word: ind + 2 for word, ind in w2i.iteritems()}
+        self.vocab = {word: ind + 2 for word, ind in w2i.items()}
         self.pos = {word: ind + 2 for ind, word in enumerate(pos)}
         self.rels = {word: ind + 1 for ind, word in enumerate(rels)}
         self.chars = {c: i + 2 for i, c in enumerate(chars)}
@@ -33,17 +33,17 @@ class MSTParserLSTM:
                 external_embedding_fp.close()
                 self.evocab = {word: i + 2 for i, word in enumerate(external_embedding)}
 
-                edim = len(external_embedding.values()[0])
+                edim = len(list(external_embedding.values())[0])
                 self.elookup = self.model.add_lookup_parameters((len(external_embedding) + 2, edim))
                 self.elookup.set_updated(False)
                 self.elookup.init_row(0, [0] * edim)
-                for word in external_embedding.keys():
+                for word in list(external_embedding.keys()):
                     self.elookup.init_row(self.evocab[word], external_embedding[word])
                     if word == '_UNK_':
                         self.elookup.init_row(0, external_embedding[word])
 
-                print 'Initialized with pre-trained embedding. Vector dimensions', edim, 'and', len(external_embedding),\
-                    'words, number of training words', len(w2i) + 2
+                print('Initialized with pre-trained embedding. Vector dimensions', edim, 'and', len(external_embedding),\
+                    'words, number of training words', len(w2i) + 2)
 
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe))
 
@@ -162,7 +162,7 @@ class MSTParserLSTM:
 
         def _emb_mask_generator(seq_len, batch_size):
             ret = []
-            for _ in xrange(seq_len):
+            for _ in range(seq_len):
                 word_mask = np.random.binomial(1, 1. - self.options.dropout, batch_size).astype(np.float32)
                 if self.options.use_pos:
                     tag_mask = np.random.binomial(1, 1. - self.options.dropout, batch_size).astype(np.float32)

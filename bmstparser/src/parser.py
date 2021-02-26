@@ -1,5 +1,6 @@
 from optparse import OptionParser
 import pickle, utils, mstlstm, sys, os.path, time
+from functools import reduce
 
 
 def test(parser, buckets, test_file, output_file):
@@ -63,35 +64,35 @@ if __name__ == '__main__':
     parser.add_option("--dynet-gpus", action="store_true", dest="dynet-gpus", default=False, help='Use GPU instead of cpu.')
 
     (options, args) = parser.parse_args()
-    print options
-    print 'Using external embedding:', options.external_embedding
+    print(options)
+    print('Using external embedding:', options.external_embedding)
     if options.predictFlag:
         with open(options.params, 'r') as paramsfp:
             w2i, pos, rels, chars, stored_opt = pickle.load(paramsfp)
         stored_opt.external_embedding = options.external_embedding
-        print stored_opt
-        print 'Initializing lstm mstparser:'
+        print(stored_opt)
+        print('Initializing lstm mstparser:')
         parser = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, stored_opt)
         parser.Load(options.model)
         ts = time.time()
-        print 'loading buckets'
+        print('loading buckets')
         test_buckets = [list()]
         test_data = list(utils.read_conll(open(options.conll_test, 'r')))
         for d in test_data:
             test_buckets[0].append(d)
-        print 'parsing'
+        print('parsing')
         test(parser, test_buckets, options.conll_test, options.conll_output)
         te = time.time()
-        print 'Finished predicting test.', te-ts, 'seconds.'
+        print('Finished predicting test.', te-ts, 'seconds.')
     else:
-        print 'Preparing vocab'
+        print('Preparing vocab')
         w2i, pos, rels, chars = utils.vocab(options.conll_train)
         if not os.path.isdir(options.output): os.mkdir(options.output)
         with open(os.path.join(options.output, options.params), 'w') as paramsfp:
             pickle.dump((w2i, pos, rels, chars, options), paramsfp)
-        print 'Finished collecting vocab'
+        print('Finished collecting vocab')
 
-        print 'Initializing lstm mstparser:'
+        print('Initializing lstm mstparser:')
         parser = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, options)
         best_acc = -float('inf')
         t, epoch = 0,1
@@ -110,7 +111,7 @@ if __name__ == '__main__':
         best_las = 0
         no_improvement = 0
         while t<=options.t and epoch <= options.epoch:
-            print 'Starting epoch', epoch, 'time:', time.ctime()
+            print('Starting epoch', epoch, 'time:', time.ctime())
             mini_batches = utils.get_batches(buckets, parser, True)
             start, closs = time.time(), 0
             for i, minibatch in enumerate(mini_batches):
@@ -125,20 +126,20 @@ if __name__ == '__main__':
                     if t%100==0 and options.conll_dev:
                         if options.eval_non_avg:
                             uas, las = test(parser, dev_buckets, options.conll_dev, options.output + '/dev.out')
-                            print 'dev non-avg acc', las, uas
+                            print('dev non-avg acc', las, uas)
                             if las > best_las:
                                 best_las = las
-                                print 'saving non-avg with', best_las, uas
+                                print('saving non-avg with', best_las, uas)
                                 parser.Save(options.output + '/model')
                                 no_improvement = 0
                             else:
                                 no_improvement += 1
                         avg_model = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, options, parser)
                         uas, las = test(avg_model, dev_buckets, options.conll_dev, options.output+'/dev.out')
-                        print 'dev avg acc', las, uas
+                        print('dev avg acc', las, uas)
                         if las > best_las:
                             best_las = las
-                            print 'saving avg with', best_las, uas
+                            print('saving avg with', best_las, uas)
                             avg_model.Save(options.output + '/model')
                             no_improvement = 0
                         else:
@@ -146,14 +147,14 @@ if __name__ == '__main__':
                     start, closs = time.time(), 0
 
             if no_improvement>options.stop:
-                print 'No improvements after',no_improvement, 'steps -> terminating.'
+                print('No improvements after',no_improvement, 'steps -> terminating.')
                 sys.exit(0)
-            print 'current learning rate', parser.trainer.learning_rate, 't:', t
+            print('current learning rate', parser.trainer.learning_rate, 't:', t)
             epoch+=1
 
         if not options.conll_dev:
             avg_model = mstlstm.MSTParserLSTM(pos, rels, w2i, chars, options, parser)
-            print 'Saving default model without dev-tuning'
+            print('Saving default model without dev-tuning')
             avg_model.Save(options.output + '/model')
 
 

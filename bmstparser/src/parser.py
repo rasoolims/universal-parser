@@ -67,7 +67,7 @@ if __name__ == '__main__':
     print(options)
     print('Using external embedding:', options.external_embedding)
     if options.predictFlag:
-        with open(options.params, 'r') as paramsfp:
+        with open(options.params, 'rb') as paramsfp:
             w2i, pos, rels, chars, stored_opt = pickle.load(paramsfp)
         stored_opt.external_embedding = options.external_embedding
         print(stored_opt)
@@ -88,7 +88,7 @@ if __name__ == '__main__':
         print('Preparing vocab')
         w2i, pos, rels, chars = utils.vocab(options.conll_train)
         if not os.path.isdir(options.output): os.mkdir(options.output)
-        with open(os.path.join(options.output, options.params), 'w') as paramsfp:
+        with open(os.path.join(options.output, options.params), 'wb') as paramsfp:
             pickle.dump((w2i, pos, rels, chars, options), paramsfp)
         print('Finished collecting vocab')
 

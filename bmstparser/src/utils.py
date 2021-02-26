@@ -1,9 +1,6 @@
 from collections import Counter
 import re, codecs,sys, random
 import numpy as np
-import importlib
-importlib.reload(sys)
-sys.setdefaultencoding('utf8')
 
 class ConllEntry:
     def __init__(self, id, form, lemma, pos, fpos, feats=None, head=None, relation=None, deps=None, misc=None):

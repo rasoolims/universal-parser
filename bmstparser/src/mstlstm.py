@@ -70,89 +70,32 @@ class MSTParserLSTM:
             if options.use_char:
                 self.clookup = self.model.add_lookup_parameters((len(chars) + 2, options.ce))
                 self.char_lstm = BiRNNBuilder(1, options.ce, self.edim, self.model, VanillaLSTMBuilder)
-
-            self.a_wlookup = np.ndarray(shape=(self.edim, len(w2i)+2), dtype=float)
-            self.a_wlookup.fill(0)
-            self.a_plookup = np.ndarray(shape=(options.pe, len(pos)+2), dtype=float)
-            self.a_plookup.fill(0)
-            self.a_arc_mlp_head = np.ndarray(shape=(options.arc_mlp, options.rnn * 2), dtype=float)
-            self.a_arc_mlp_head.fill(0)
-            self.a_arc_mlp_head_b = np.ndarray(shape=(options.arc_mlp,), dtype=float)
-            self.a_arc_mlp_head_b.fill(0)
-            self.a_label_mlp_head = np.ndarray(shape=(options.label_mlp, options.rnn * 2), dtype=float)
-            self.a_label_mlp_head.fill(0)
-            self.a_label_mlp_head_b = np.ndarray(shape=(options.label_mlp,), dtype=float)
-            self.a_label_mlp_head_b.fill(0)
-            self.a_arc_mlp_dep = np.ndarray(shape=(options.arc_mlp, options.rnn * 2), dtype=float)
-            self.a_arc_mlp_dep.fill(0)
-            self.a_arc_mlp_dep_b = np.ndarray(shape=(options.arc_mlp,), dtype=float)
-            self.a_arc_mlp_dep_b.fill(0)
-            self.a_label_mlp_dep = np.ndarray(shape=(options.label_mlp, options.rnn * 2), dtype=float)
-            self.a_label_mlp_dep.fill(0)
-            self.a_label_mlp_dep_b =  np.ndarray(shape=(options.label_mlp,), dtype=float)
-            self.a_label_mlp_dep_b.fill(0)
-            self.a_w_arc = np.ndarray(shape=(options.arc_mlp,options.arc_mlp+1), dtype=float)
-            self.a_w_arc.fill(0)
-            self.a_u_label = np.ndarray(shape=(len(self.irels) * (options.label_mlp + 1), options.label_mlp + 1), dtype=float)
-            self.a_u_label.fill(0)
-
-            self.a_lstms = []
-            for i in range(len(self.deep_lstms.builder_layers)):
-                builder = self.deep_lstms.builder_layers[i]
-                params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
-                this_layer = []
-                for j in range(len(params)):
-                    dim = params[j].expr().dim()
-                    if (j+1)%3==0: # bias
-                        x = np.ndarray(shape=(dim[0][0],), dtype=float)
-                        x.fill(0)
-                        this_layer.append(x)
-                    else:
-                        x = np.ndarray(shape=(dim[0][0],dim[0][1]), dtype=float)
-                        x.fill(0)
-                        this_layer.append(x)
-                self.a_lstms.append(this_layer)
-
-            if options.use_char:
-                self.a_clookup = np.ndarray(shape=(options.ce, len(chars) + 2), dtype=float)
-                self.ac_lstms = []
-                for i in range(len(self.char_lstm.builder_layers)):
-                    builder = self.char_lstm.builder_layers[i]
-                    params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
-                    this_layer = []
-                    for j in range(len(params)):
-                        dim = params[j].expr().dim()
-                        if (j + 1) % 3 == 0:  # bias
-                            this_layer.append(np.ndarray(shape=(dim[0][0],), dtype=float))
-                        else:
-                            this_layer.append(np.ndarray(shape=(dim[0][0], dim[0][1]), dtype=float))
-                    self.ac_lstms.append(this_layer)
         else:
-            self.wlookup = self.model.add_lookup_parameters((len(w2i) + 2, self.edim), init=NumpyInitializer(from_model.a_wlookup))
+            self.wlookup = self.model.add_lookup_parameters((len(w2i) + 2, self.edim), init=NumpyInitializer(from_model.wlookup))
             if from_model.evocab:
                 self.evocab = from_model.evocab
                 self.elookup =  self.model.add_lookup_parameters((len(self.evocab) + 2, self.edim), init=NumpyInitializer(from_model.elookup.expr().npvalue()))
-            self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe), init=NumpyInitializer(from_model.a_plookup))
-            self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init=NumpyInitializer(from_model.a_arc_mlp_head))
-            self.arc_mlp_head_b = self.model.add_parameters((options.arc_mlp,),init=NumpyInitializer(from_model.a_arc_mlp_head_b))
-            self.label_mlp_head = self.model.add_parameters((options.label_mlp, options.rnn * 2),init=NumpyInitializer(from_model.a_label_mlp_head))
-            self.label_mlp_head_b = self.model.add_parameters((options.label_mlp,),init=NumpyInitializer(from_model.a_label_mlp_head_b))
-            self.arc_mlp_dep = self.model.add_parameters((options.arc_mlp, options.rnn * 2),init=NumpyInitializer(from_model.a_arc_mlp_dep))
-            self.arc_mlp_dep_b = self.model.add_parameters((options.arc_mlp,),init=NumpyInitializer(from_model.a_arc_mlp_dep_b))
-            self.label_mlp_dep = self.model.add_parameters((options.label_mlp, options.rnn * 2), init = NumpyInitializer(from_model.a_label_mlp_dep))
-            self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init = NumpyInitializer(from_model.a_label_mlp_dep_b))
-            self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp + 1), init = NumpyInitializer(from_model.a_w_arc))
-            self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp + 1), options.label_mlp + 1),init = NumpyInitializer(from_model.a_u_label))
+            self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe), init=NumpyInitializer(from_model.plookup))
+            self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init=NumpyInitializer(from_model.arc_mlp_head))
+            self.arc_mlp_head_b = self.model.add_parameters((options.arc_mlp,),init=NumpyInitializer(from_model.arc_mlp_head_b))
+            self.label_mlp_head = self.model.add_parameters((options.label_mlp, options.rnn * 2),init=NumpyInitializer(from_model.label_mlp_head))
+            self.label_mlp_head_b = self.model.add_parameters((options.label_mlp,),init=NumpyInitializer(from_model.label_mlp_head_b))
+            self.arc_mlp_dep = self.model.add_parameters((options.arc_mlp, options.rnn * 2),init=NumpyInitializer(from_model.arc_mlp_dep))
+            self.arc_mlp_dep_b = self.model.add_parameters((options.arc_mlp,),init=NumpyInitializer(from_model.arc_mlp_dep_b))
+            self.label_mlp_dep = self.model.add_parameters((options.label_mlp, options.rnn * 2), init = NumpyInitializer(from_model.label_mlp_dep))
+            self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init = NumpyInitializer(from_model.label_mlp_dep_b))
+            self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp + 1), init = NumpyInitializer(from_model.w_arc))
+            self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp + 1), options.label_mlp + 1),init = NumpyInitializer(from_model.u_label))
             input_dim = self.edim + options.pe if self.options.use_pos else self.edim
             self.deep_lstms = BiRNNBuilder(options.layer, input_dim, options.rnn * 2, self.model, VanillaLSTMBuilder)
             for i in range(len(self.deep_lstms.builder_layers)):
                 builder = self.deep_lstms.builder_layers[i]
                 params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
                 for j in range(len(params)):
-                    params[j].set_value(from_model.a_lstms[i][j])
+                    params[j].set_value(from_model.lstms[i][j])
 
             if options.use_char:
-                self.clookup = self.model.add_lookup_parameters((len(chars) + 2, options.ce),  init=NumpyInitializer(from_model.a_clookup))
+                self.clookup = self.model.add_lookup_parameters((len(chars) + 2, options.ce),  init=NumpyInitializer(from_model.clookup))
                 self.char_lstm = BiRNNBuilder(1, options.ce, self.edim, self.model, VanillaLSTMBuilder)
                 for i in range(len(self.char_lstm.builder_layers)):
                     builder = self.char_lstm.builder_layers[i]
@@ -180,36 +123,6 @@ class MSTParserLSTM:
             return ret
 
         self.generate_emb_mask = _emb_mask_generator
-
-    def moving_avg(self, r1, r2):
-        self.a_wlookup = r1 * self.a_wlookup + r2 * self.wlookup.expr().npvalue()
-        self.a_plookup = r1 * self.a_plookup + r2 * self.plookup.expr().npvalue()
-        self.a_arc_mlp_head = r1 * self.a_arc_mlp_head + r2 * self.arc_mlp_head.expr().npvalue()
-        self.a_arc_mlp_head_b = r1 * self.a_arc_mlp_head_b + r2 * self.arc_mlp_head_b.expr().npvalue()
-        self.a_label_mlp_head = r1 * self.a_label_mlp_head + r2 * self.label_mlp_head.expr().npvalue()
-        self.a_label_mlp_head_b = r1 * self.a_label_mlp_head_b + r2 * self.label_mlp_head_b.expr().npvalue()
-        self.a_arc_mlp_dep = r1 * self.a_arc_mlp_dep + r2 * self.arc_mlp_dep.expr().npvalue()
-        self.a_arc_mlp_dep_b = r1 * self.a_arc_mlp_dep_b + r2 * self.arc_mlp_dep_b.expr().npvalue()
-        self.a_label_mlp_dep = r1 * self.a_label_mlp_dep + r2 * self.label_mlp_dep.expr().npvalue()
-        self.a_label_mlp_dep_b = r1 * self.a_label_mlp_dep_b + r2 * self.label_mlp_dep_b.expr().npvalue()
-        self.a_w_arc = r1 * self.a_w_arc + r2 * self.w_arc.expr().npvalue()
-        self.a_u_label = r1 * self.a_u_label + r2 * self.u_label.expr().npvalue()
-
-        for i in range(len(self.deep_lstms.builder_layers)):
-            builder = self.deep_lstms.builder_layers[i]
-            params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
-            for j in range(len(params)):
-                self.a_lstms[i][j] = r1 * self.a_lstms[i][j] + r2 * params[j].expr().npvalue()
-
-        if self.options.use_char:
-            self.a_clookup = r1 * self.a_clookup + r2 * self.clookup.expr().npvalue()
-            for i in range(len(self.char_lstm.builder_layers)):
-                builder = self.char_lstm.builder_layers[i]
-                params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
-                for j in range(len(params)):
-                    self.ac_lstms[i][j] = r1 * self.ac_lstms[i][j] + r2 * params[j].expr().npvalue()
-
-        renew_cg()
 
     def bilinear(self, M, W, H, input_size, seq_len, batch_size, num_outputs=1, bias_x=False, bias_y=False):
         if bias_x:
@@ -315,8 +228,6 @@ class MSTParserLSTM:
             err.backward()
             self.trainer.update()
             renew_cg()
-            ratio = min(0.9999, float(t) / (9 + t))
-            self.moving_avg(ratio, 1 - ratio)
             return t + 1, loss
         else:
             arc_probs = np.transpose(np.reshape(softmax(flat_scores).npvalue(), (mini_batch[0].shape[0],  mini_batch[0].shape[0],  mini_batch[0].shape[1]), 'F'))

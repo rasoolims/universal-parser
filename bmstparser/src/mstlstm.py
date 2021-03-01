@@ -22,7 +22,7 @@ class MSTParserLSTM:
         self.root_id = self.rels['root']
         self.irels = ['PAD'] + rels
         self.PAD_REL = 0
-        edim = options.we
+        self.edim = options.we
         if not from_model:
             self.elookup = None
             if options.external_embedding is not None:
@@ -32,19 +32,19 @@ class MSTParserLSTM:
                 external_embedding_fp.close()
                 self.evocab = {word: i + 2 for i, word in enumerate(external_embedding)}
 
-                edim = len(list(external_embedding.values())[0])
-                self.elookup = self.model.add_lookup_parameters((len(external_embedding) + 2, edim))
+                self.edim = len(list(external_embedding.values())[0])
+                self.elookup = self.model.add_lookup_parameters((len(external_embedding) + 2, self.edim))
                 self.elookup.set_updated(False)
-                self.elookup.init_row(0, [0] * edim)
+                self.elookup.init_row(0, [0] * self.edim)
                 for word in list(external_embedding.keys()):
                     self.elookup.init_row(self.evocab[word], external_embedding[word])
                     if word == '_UNK_':
                         self.elookup.init_row(0, external_embedding[word])
 
-                print('Initialized with pre-trained embedding. Vector dimensions', edim, 'and', len(external_embedding),\
+                print('Initialized with pre-trained embedding. Vector dimensions', self.edim, 'and', len(external_embedding),\
                     'words, number of training words', len(w2i) + 2)
 
-            self.wlookup = self.model.add_lookup_parameters((len(w2i) + 2, edim))
+            self.wlookup = self.model.add_lookup_parameters((len(w2i) + 2, self.edim))
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe))
 
             w_mlp_arc = orthonormal_initializer(options.arc_mlp, options.rnn * 2)
@@ -59,7 +59,7 @@ class MSTParserLSTM:
             self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init = ConstInitializer(0))
             self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp+1), init = ConstInitializer(0))
             self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp+1), options.label_mlp+1), init = ConstInitializer(0))
-            input_dim = edim + options.pe if self.options.use_pos else edim
+            input_dim = self.edim + options.pe if self.options.use_pos else self.edim
             self.deep_lstms = BiRNNBuilder(options.layer, input_dim, options.rnn * 2, self.model, VanillaLSTMBuilder)
             for i in range(len(self.deep_lstms.builder_layers)):
                 builder = self.deep_lstms.builder_layers[i]
@@ -69,9 +69,9 @@ class MSTParserLSTM:
 
             if options.use_char:
                 self.clookup = self.model.add_lookup_parameters((len(chars) + 2, options.ce))
-                self.char_lstm = BiRNNBuilder(1, options.ce, edim, self.model, VanillaLSTMBuilder)
+                self.char_lstm = BiRNNBuilder(1, options.ce, self.edim, self.model, VanillaLSTMBuilder)
 
-            self.a_wlookup = np.ndarray(shape=(options.we, len(w2i)+2), dtype=float)
+            self.a_wlookup = np.ndarray(shape=(self.edim, len(w2i)+2), dtype=float)
             self.a_wlookup.fill(0)
             self.a_plookup = np.ndarray(shape=(options.pe, len(pos)+2), dtype=float)
             self.a_plookup.fill(0)
@@ -128,10 +128,10 @@ class MSTParserLSTM:
                             this_layer.append(np.ndarray(shape=(dim[0][0], dim[0][1]), dtype=float))
                     self.ac_lstms.append(this_layer)
         else:
-            self.wlookup = self.model.add_lookup_parameters((len(w2i) + 2, edim), init=NumpyInitializer(from_model.a_wlookup))
+            self.wlookup = self.model.add_lookup_parameters((len(w2i) + 2, self.edim), init=NumpyInitializer(from_model.a_wlookup))
             if from_model.evocab:
                 self.evocab = from_model.evocab
-                self.elookup =  self.model.add_lookup_parameters((len(self.evocab) + 2, edim), init=NumpyInitializer(from_model.elookup.expr().npvalue()))
+                self.elookup =  self.model.add_lookup_parameters((len(self.evocab) + 2, self.edim), init=NumpyInitializer(from_model.elookup.expr().npvalue()))
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe), init=NumpyInitializer(from_model.a_plookup))
             self.arc_mlp_head = self.model.add_parameters((options.arc_mlp, options.rnn * 2), init=NumpyInitializer(from_model.a_arc_mlp_head))
             self.arc_mlp_head_b = self.model.add_parameters((options.arc_mlp,),init=NumpyInitializer(from_model.a_arc_mlp_head_b))
@@ -143,7 +143,7 @@ class MSTParserLSTM:
             self.label_mlp_dep_b = self.model.add_parameters((options.label_mlp,), init = NumpyInitializer(from_model.a_label_mlp_dep_b))
             self.w_arc = self.model.add_parameters((options.arc_mlp, options.arc_mlp + 1), init = NumpyInitializer(from_model.a_w_arc))
             self.u_label = self.model.add_parameters((len(self.irels) * (options.label_mlp + 1), options.label_mlp + 1),init = NumpyInitializer(from_model.a_u_label))
-            input_dim = edim + options.pe if self.options.use_pos else edim
+            input_dim = self.edim + options.pe if self.options.use_pos else self.edim
             self.deep_lstms = BiRNNBuilder(options.layer, input_dim, options.rnn * 2, self.model, VanillaLSTMBuilder)
             for i in range(len(self.deep_lstms.builder_layers)):
                 builder = self.deep_lstms.builder_layers[i]
@@ -153,7 +153,7 @@ class MSTParserLSTM:
 
             if options.use_char:
                 self.clookup = self.model.add_lookup_parameters((len(chars) + 2, options.ce),  init=NumpyInitializer(from_model.a_clookup))
-                self.char_lstm = BiRNNBuilder(1, options.ce, edim, self.model, VanillaLSTMBuilder)
+                self.char_lstm = BiRNNBuilder(1, options.ce, self.edim, self.model, VanillaLSTMBuilder)
                 for i in range(len(self.char_lstm.builder_layers)):
                     builder = self.char_lstm.builder_layers[i]
                     params = builder[0].get_parameters()[0] + builder[1].get_parameters()[0]
@@ -264,7 +264,7 @@ class MSTParserLSTM:
             cembed = [lookup_batch(self.clookup, c) for c in chars]
             char_fwd, char_bckd = self.char_lstm.builder_layers[0][0].initial_state().transduce(cembed)[-1],\
                                   self.char_lstm.builder_layers[0][1].initial_state().transduce(reversed(cembed))[-1]
-            crnn = reshape(concatenate_cols([char_fwd, char_bckd]), (self.options.we, words.shape[0]*words.shape[1]))
+            crnn = reshape(concatenate_cols([char_fwd, char_bckd]), (self.edim, words.shape[0]*words.shape[1]))
             cnn_reps = [list() for _ in range(len(words))]
             for i in range(words.shape[0]):
                 cnn_reps[i] = pick_batch(crnn, [i * words.shape[1] + j for j in range(words.shape[1])], 1)

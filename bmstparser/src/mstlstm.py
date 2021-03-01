@@ -24,7 +24,6 @@ class MSTParserLSTM:
         self.PAD_REL = 0
         edim = options.we
         if not from_model:
-            self.wlookup = self.model.add_lookup_parameters((len(w2i) + 2, edim))
             self.elookup = None
             if options.external_embedding is not None:
                 external_embedding_fp = gzip.open(options.external_embedding, 'rt')
@@ -45,6 +44,7 @@ class MSTParserLSTM:
                 print('Initialized with pre-trained embedding. Vector dimensions', edim, 'and', len(external_embedding),\
                     'words, number of training words', len(w2i) + 2)
 
+            self.wlookup = self.model.add_lookup_parameters((len(w2i) + 2, edim))
             self.plookup = self.model.add_lookup_parameters((len(pos) + 2, options.pe))
 
             w_mlp_arc = orthonormal_initializer(options.arc_mlp, options.rnn * 2)
@@ -301,15 +301,14 @@ class MSTParserLSTM:
         flat_rel_scores = reshape(rel_scores, (mini_batch[0].shape[0], len(self.irels)), mini_batch[0].shape[0]* mini_batch[0].shape[1])
         masks = np.reshape(mini_batch[-1], (-1,), 'F')
         mask_1D_tensor = inputTensor(masks, batched=True)
-        n_tokens = np.sum(masks)
         if train:
             heads = np.reshape(mini_batch[3], (-1,), 'F')
             partial_rel_scores = pick_batch(flat_rel_scores, heads)
             gold_relations = np.reshape(mini_batch[4], (-1,), 'F')
             arc_losses = pickneglogsoftmax_batch(flat_scores, heads)
-            arc_loss = sum_batches(arc_losses*mask_1D_tensor)/n_tokens
+            arc_loss = mean_batches(arc_losses*mask_1D_tensor)
             rel_losses = pickneglogsoftmax_batch(partial_rel_scores, gold_relations)
-            rel_loss = sum_batches(rel_losses*mask_1D_tensor)/n_tokens
+            rel_loss = mean_batches(rel_losses*mask_1D_tensor)
             err = 0.5 * (arc_loss + rel_loss)
             err.scalar_value()
             loss = err.value()
